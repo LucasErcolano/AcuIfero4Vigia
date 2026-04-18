@@ -1,0 +1,29 @@
+[project]
+name = "acuifero-vigia"
+version = "0.1.0"
+description = "Acuifero 4 + Vigia MVP"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "sqlmodel",
+    "pydantic",
+    "opencv-python-headless",
+    "numpy",
+    "python-multipart",
+    "aiofiles",
+    "httpx",
+    "orjson",
+    "faster-whisper"
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-asyncio"
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
