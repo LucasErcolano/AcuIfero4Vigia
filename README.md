@@ -125,6 +125,53 @@ Smoke demo once the API is live:
 python scripts/demo.py
 ```
 
+## Reproducible smoke test
+
+With Ollama running locally and `gemma4:e2b` already pulled:
+
+```bash
+./tools/ollama/bin/ollama list
+```
+
+Start the stack in two terminals:
+
+```bash
+cd backend
+PYTHONPATH=src python3 -m acuifero_vigia.scripts.seed
+PYTHONPATH=src python3 -m uvicorn acuifero_vigia.main:app --host 127.0.0.1 --port 8000
+```
+
+```bash
+cd frontend
+npm run dev -- --host 127.0.0.1 --port 5173
+```
+
+Then validate the live stack from a third terminal:
+
+```bash
+curl -sf http://127.0.0.1:8000/api/settings/runtime | jq
+curl -sf http://127.0.0.1:8000/api/sites | jq '.[] | {id,name}'
+curl -sf -X POST http://127.0.0.1:8000/api/sites/silverado-fixed-cam-usgs/sample-node-analysis | jq '{site_id: .observation.site_id, frames_analyzed: .observation.frames_analyzed, waterline_ratio: .observation.waterline_ratio, alert_level: .alert.level}'
+curl -sf -X POST http://127.0.0.1:8000/api/reports \
+  -F site_id=silverado-fixed-cam-usgs \
+  -F reporter_name='Operador Demo' \
+  -F reporter_role='brigadista' \
+  -F transcript_text='El agua ya cruzo la marca critica y trae barro, evacuar zona baja.' \
+  -F offline_created=true | jq '{report_id: .report.id, parser_source: .parsed.parser_source, urgency: .parsed.urgency, alert_level: .alert.level}'
+```
+
+Expected on a healthy setup:
+
+- `/api/settings/runtime` returns `llm.reachable=true` and `model=gemma4:e2b`
+- sample-node analysis returns `frames_analyzed=126` and `alert_level=red` for the bundled USGS clip
+- report submission returns `200 OK` and creates a fused red alert for the sample site
+
+Notes:
+
+- Run the seed before the smoke test, otherwise `silverado-fixed-cam-usgs` will not exist.
+- The first local LLM request can be noticeably slower while Ollama warms the model.
+- `parser_source` can be `llm` when the model returns valid JSON, or `rules` if the backend falls back to deterministic parsing.
+
 ## Main API routes
 
 - `GET /api/health`
