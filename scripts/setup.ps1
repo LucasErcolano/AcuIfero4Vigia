@@ -13,7 +13,8 @@ if (!(Test-Path ".venv")) {
     uv venv
     uv pip install -e .[dev]
 } else {
-    Write-Host "Backend virtualenv already exists. Skipping reinstall."
+    Write-Host "Backend virtualenv already exists. Ensuring project is installed in editable mode."
+    uv pip install -e .[dev]
 }
 Pop-Location
 
@@ -22,9 +23,10 @@ Push-Location $FrontendDir
 npm install --legacy-peer-deps
 Pop-Location
 
-Write-Host "[3] Seeding data if missing..."
-if (!(Test-Path (Join-Path $BackendDir "data\edge.db"))) {
-    & $BackendPython (Join-Path $BackendDir "src\acuifero_vigia\scripts\seed.py")
-}
+Write-Host "[3] Fetching demo media assets..."
+& $BackendPython (Join-Path $RepoRoot "scripts\fetch_demo_assets.py")
+
+Write-Host "[4] Seeding data..."
+& $BackendPython -m acuifero_vigia.scripts.seed
 
 Write-Host "Setup complete."

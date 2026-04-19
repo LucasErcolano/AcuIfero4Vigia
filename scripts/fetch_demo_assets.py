@@ -1,0 +1,54 @@
+from __future__ import annotations
+
+import urllib.request
+from pathlib import Path
+
+import cv2
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+MEDIA_DIR = PROJECT_ROOT / 'fixtures' / 'media'
+FRAME_DIR = PROJECT_ROOT / 'fixtures' / 'frames'
+VIDEO_PATH = MEDIA_DIR / 'usgs_silverado_fire_2015_fixed_cam.mp4'
+SOURCE_PAGE_URL = 'https://www.usgs.gov/media/videos/post-wildfire-flood-and-debris-flow-2014-silverado-fire'
+DIRECT_VIDEO_URL = (
+    'https://usgs-ocapsv2-public-input-media.s3.us-west-2.amazonaws.com/'
+    'assets/palladium/production/s3fs-public/FinalFire.mp4'
+)
+FRAME_SECONDS = (15, 30, 60, 90)
+
+
+def download_video() -> None:
+    MEDIA_DIR.mkdir(parents=True, exist_ok=True)
+    if VIDEO_PATH.exists() and VIDEO_PATH.stat().st_size > 0:
+        print(f'Clip already present: {VIDEO_PATH}')
+        return
+
+    print(f'Downloading demo clip from {SOURCE_PAGE_URL}')
+    with urllib.request.urlopen(DIRECT_VIDEO_URL) as response, VIDEO_PATH.open('wb') as target:
+        target.write(response.read())
+    print(f'Saved clip to {VIDEO_PATH}')
+
+
+def extract_reference_frames() -> None:
+    FRAME_DIR.mkdir(parents=True, exist_ok=True)
+    capture = cv2.VideoCapture(str(VIDEO_PATH))
+    if not capture.isOpened():
+        raise RuntimeError(f'Could not open {VIDEO_PATH}')
+
+    fps = capture.get(cv2.CAP_PROP_FPS) or 30.0
+    for second in FRAME_SECONDS:
+        frame_index = int(second * fps)
+        capture.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
+        ok, frame = capture.read()
+        if not ok:
+            raise RuntimeError(f'Could not decode frame at {second}s from {VIDEO_PATH}')
+        output_path = FRAME_DIR / f'silverado_{second:03d}s.jpg'
+        cv2.imwrite(str(output_path), frame)
+        print(f'Wrote {output_path}')
+
+    capture.release()
+
+
+if __name__ == '__main__':
+    download_video()
+    extract_reference_frames()

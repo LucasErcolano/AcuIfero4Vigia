@@ -3,6 +3,8 @@ backend/.pytest_cache/
 backend/.uv-cache/
 backend/data/*.db
 backend/data/uploads/
+backend/data/logs/
+backend/data/ollama-models/
 backend/**/*.log
 backend/**/__pycache__/
 backend/**/*.pyc
@@ -10,6 +12,12 @@ backend/**/*.pyc
 frontend/node_modules/
 frontend/dist/
 frontend/**/*.log
+
+tools/ollama/
+fixtures/media/
+fixtures/frames/
+.codex
+.codex/
 
 .env
 .env.*

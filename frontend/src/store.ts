@@ -6,7 +6,7 @@ import {
   type PendingAttachment,
 } from './lib/idb';
 
-const API_BASE = 'http://localhost:8000/api';
+export const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8000/api';
 
 function appendAttachment(
   formData: FormData,
@@ -27,6 +27,7 @@ export interface Site {
   region: string;
   lat: number;
   lng: number;
+  description?: string;
   is_active: boolean;
 }
 
@@ -37,6 +38,7 @@ export interface FusedAlert {
   score: number;
   summary: string;
   created_at: string;
+  trigger_source?: string;
 }
 
 interface AppState {
@@ -44,8 +46,6 @@ interface AppState {
   sites: Site[];
   alerts: FusedAlert[];
   queueCount: number;
-  
-  // Actions
   setOnline: (status: boolean) => void;
   fetchSites: () => Promise<void>;
   fetchAlerts: () => Promise<void>;
@@ -95,7 +95,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       } else {
         set({ isOnline: false });
       }
-    } catch (err) {
+    } catch {
       set({ isOnline: false });
     }
     await get().updateQueueCount();
@@ -114,7 +114,9 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
 
     const pending = await getPendingReports();
-    if (pending.length === 0) return;
+    if (pending.length === 0) {
+      return;
+    }
 
     let successCount = 0;
     for (const report of pending) {

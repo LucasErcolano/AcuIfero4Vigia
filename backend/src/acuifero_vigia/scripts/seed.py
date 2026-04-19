@@ -1,54 +1,94 @@
-import os
-import sys
-# Add backend root to sys.path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../..")))
+from __future__ import annotations
 
-from sqlmodel import Session
-from src.acuifero_vigia.db.database import init_db, edge_engine, central_engine
-from src.acuifero_vigia.models.domain import Site, SiteCalibration
+from sqlmodel import Session, select
 
-def seed():
-    print("Initializing databases...")
+from acuifero_vigia.db.database import edge_engine, init_db
+from acuifero_vigia.models.domain import Site, SiteCalibration
+
+
+def _upsert_site(session: Session, payload: dict[str, object]) -> None:
+    site_id = str(payload['id'])
+    site = session.get(Site, site_id)
+    if site is None:
+        session.add(Site(**payload))
+        return
+
+    for key, value in payload.items():
+        setattr(site, key, value)
+
+
+def _ensure_calibration(session: Session, payload: dict[str, object]) -> None:
+    existing = session.exec(
+        select(SiteCalibration)
+        .where(SiteCalibration.site_id == str(payload['site_id']))
+        .order_by(SiteCalibration.created_at.desc())
+    ).first()
+    if existing is not None:
+        return
+    session.add(SiteCalibration(**payload))
+
+
+def seed() -> None:
     init_db()
-    
-    with Session(edge_engine) as session:
-        # Check if sites exist
-        existing = session.query(Site).first()
-        if not existing:
-            print("Seeding sites...")
-            site1 = Site(
-                id="puente-arroyo-01",
-                name="Puente Arroyo 01",
-                region="Litoral Sur",
-                lat=-32.9468,
-                lng=-60.6393,
-                description="Puente principal en ruta provincial",
-                is_active=True
-            )
-            site2 = Site(
-                id="calle-baja-02",
-                name="Calle Baja 02",
-                region="Litoral Norte",
-                lat=-32.9568,
-                lng=-60.6493,
-                description="Vado inundable frecuente",
-                is_active=True
-            )
-            session.add(site1)
-            session.add(site2)
-            
-            print("Seeding calibration...")
-            cal1 = SiteCalibration(
-                site_id="puente-arroyo-01",
-                roi_polygon="[[10, 10], [200, 10], [200, 200], [10, 200]]",
-                critical_line="[[10, 150], [200, 150]]",
-                reference_line="[[10, 180], [200, 180]]"
-            )
-            session.add(cal1)
-            session.commit()
-            print("Seeding complete.")
-        else:
-            print("Data already seeded.")
 
-if __name__ == "__main__":
+    sites = [
+        {
+            'id': 'puente-arroyo-01',
+            'name': 'Puente Arroyo 01',
+            'region': 'Litoral Sur',
+            'lat': -32.9468,
+            'lng': -60.6393,
+            'description': 'Puente principal en ruta provincial',
+            'is_active': True,
+        },
+        {
+            'id': 'calle-baja-02',
+            'name': 'Calle Baja 02',
+            'region': 'Litoral Norte',
+            'lat': -32.9568,
+            'lng': -60.6493,
+            'description': 'Vado inundable frecuente',
+            'is_active': True,
+        },
+        {
+            'id': 'silverado-fixed-cam-usgs',
+            'name': 'Silverado Fixed Cam (USGS)',
+            'region': 'Orange County, California',
+            'lat': 33.7471,
+            'lng': -117.6416,
+            'description': 'Sitio demo con clip oficial de camara fija USGS para probar analisis real de avenida y debris flow.',
+            'sample_video_path': 'fixtures/media/usgs_silverado_fire_2015_fixed_cam.mp4',
+            'sample_video_source_url': 'https://www.usgs.gov/media/videos/post-wildfire-flood-and-debris-flow-2014-silverado-fire',
+            'sample_frame_path': 'fixtures/frames/silverado_060s.jpg',
+            'is_active': True,
+        },
+    ]
+
+    calibrations = [
+        {
+            'site_id': 'puente-arroyo-01',
+            'roi_polygon': '[[0, 40], [640, 40], [640, 430], [0, 430]]',
+            'critical_line': '[[0, 170], [640, 170]]',
+            'reference_line': '[[0, 260], [640, 260]]',
+            'notes': 'Default calibration expressed in frame pixels for a 640x480 reference clip.',
+        },
+        {
+            'site_id': 'silverado-fixed-cam-usgs',
+            'roi_polygon': '[[0, 70], [980, 70], [980, 265], [0, 265]]',
+            'critical_line': '[[0, 118], [980, 118]]',
+            'reference_line': '[[0, 190], [980, 190]]',
+            'notes': 'USGS fixed camera reference frame 980x552. Search band focused on the upper channel to avoid the foreground vegetation and watermark.',
+        },
+    ]
+
+    with Session(edge_engine) as session:
+        for site_payload in sites:
+            _upsert_site(session, site_payload)
+        for calibration_payload in calibrations:
+            _ensure_calibration(session, calibration_payload)
+        session.commit()
+        print(f'Seed complete. Sites available: {len(sites)}')
+
+
+if __name__ == '__main__':
     seed()

@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { useAppStore } from '../store';
-import { AlertTriangle, MapPin, CheckCircle2 } from 'lucide-react';
+import { AlertTriangle, MapPin, CheckCircle2, ArrowRight } from 'lucide-react';
 
 export default function Dashboard() {
   const { sites, alerts, fetchSites, fetchAlerts, isOnline } = useAppStore();
@@ -33,17 +34,18 @@ export default function Dashboard() {
           </div>
         ) : (
           <div className="space-y-3">
-            {alerts.map((alert) => (
+            {alerts.slice(0, 6).map((alert) => (
               <div
                 key={alert.id}
                 className={`p-4 rounded-lg border flex gap-3 ${levelColors[alert.level]}`}
               >
                 <AlertTriangle className="shrink-0 mt-0.5" />
-                <div>
+                <div className="min-w-0">
                   <h3 className="font-semibold">{alert.site_id}</h3>
                   <p className="text-sm mt-1">{alert.summary}</p>
-                  <div className="text-xs mt-2 opacity-80">
-                    Score: {(alert.score * 100).toFixed(0)}%
+                  <div className="text-xs mt-2 opacity-80 flex flex-wrap gap-3">
+                    <span>Score: {(alert.score * 100).toFixed(0)}%</span>
+                    {alert.trigger_source && <span>Source: {alert.trigger_source}</span>}
                   </div>
                 </div>
               </div>
@@ -59,17 +61,25 @@ export default function Dashboard() {
         </h2>
         <div className="grid gap-3 md:grid-cols-2">
           {sites.map((site) => (
-            <div key={site.id} className="p-4 bg-white border border-gray-200 rounded-lg shadow-sm">
-              <div className="flex justify-between items-start">
+            <Link
+              key={site.id}
+              to={`/sites/${site.id}`}
+              className="p-4 bg-white border border-gray-200 rounded-lg shadow-sm hover:border-blue-300 hover:shadow transition-all"
+            >
+              <div className="flex justify-between items-start gap-4">
                 <div>
                   <h3 className="font-semibold text-gray-900">{site.name}</h3>
                   <p className="text-sm text-gray-500">{site.region}</p>
+                  {site.description && <p className="text-sm text-gray-600 mt-2">{site.description}</p>}
                 </div>
                 <span className={`px-2 py-1 text-xs rounded-full font-medium ${site.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}>
                   {site.is_active ? 'Active' : 'Inactive'}
                 </span>
               </div>
-            </div>
+              <div className="mt-4 text-sm text-blue-600 font-medium inline-flex items-center gap-1">
+                Open site <ArrowRight className="w-4 h-4" />
+              </div>
+            </Link>
           ))}
           {sites.length === 0 && isOnline && (
             <div className="text-gray-500 text-sm">No sites found.</div>

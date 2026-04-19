@@ -15,7 +15,9 @@ export default function Queue() {
   };
 
   useEffect(() => {
-    loadReports();
+    void getPendingReports().then((data) => {
+      setReports(data);
+    });
   }, []);
 
   const handleFlush = async () => {

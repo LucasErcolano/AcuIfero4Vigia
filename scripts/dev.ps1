@@ -7,7 +7,7 @@ $FrontendDir = Join-Path $RepoRoot "frontend"
 $BackendPython = Join-Path $BackendDir ".venv\Scripts\python.exe"
 $PowerShellExe = (Get-Command powershell.exe).Source
 $CmdExe = (Get-Command cmd.exe).Source
-$backendCommand = "Set-Location '$BackendDir'; & '$BackendPython' -m uvicorn src.acuifero_vigia.main:app --reload --port 8000"
+$backendCommand = "Set-Location '$BackendDir'; & '$BackendPython' -m uvicorn acuifero_vigia.main:app --reload --port 8000"
 $frontendCommand = "cd /d `"$FrontendDir`" && npm.cmd run dev -- --host 127.0.0.1 --port 5173"
 
 $backendProcess = Start-Process -FilePath $PowerShellExe `

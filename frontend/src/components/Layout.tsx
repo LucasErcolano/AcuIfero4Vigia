@@ -1,6 +1,6 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { useAppStore } from '../store';
-import { Activity, FileText, UploadCloud, Wifi, WifiOff } from 'lucide-react';
+import { useAppStore, API_BASE } from '../store';
+import { Activity, FileText, UploadCloud, Wifi, WifiOff, Settings } from 'lucide-react';
 import { useEffect } from 'react';
 
 export default function Layout() {
@@ -8,9 +8,7 @@ export default function Layout() {
   const location = useLocation();
 
   useEffect(() => {
-    // Initial check
     checkConnectivity();
-    // Poll every 10 seconds
     const interval = setInterval(() => {
       checkConnectivity();
     }, 10000);
@@ -19,16 +17,14 @@ export default function Layout() {
 
   const toggleOffline = async () => {
     const nextStatus = !isOnline;
-    // We can also inform the backend, but for this MVP frontend simulation is fine
-    // Or we hit the backend toggle endpoint if it exists.
     try {
-        await fetch('http://localhost:8000/api/settings/connectivity', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ is_online: nextStatus })
-        });
-    } catch (e) {
-        console.error("Could not toggle backend offline status", e);
+      await fetch(`${API_BASE}/settings/connectivity`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_online: nextStatus }),
+      });
+    } catch (error) {
+      console.error('Could not toggle backend offline status', error);
     }
     setOnline(nextStatus);
   };
@@ -36,21 +32,18 @@ export default function Layout() {
   const navItems = [
     { path: '/', label: 'Dashboard', icon: <Activity className="w-5 h-5" /> },
     { path: '/report', label: 'Report', icon: <FileText className="w-5 h-5" /> },
-    { 
-      path: '/queue', 
-      label: `Queue (${queueCount})`, 
-      icon: <UploadCloud className="w-5 h-5" /> 
-    },
+    { path: '/queue', label: `Queue (${queueCount})`, icon: <UploadCloud className="w-5 h-5" /> },
+    { path: '/settings', label: 'Runtime', icon: <Settings className="w-5 h-5" /> },
   ];
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900 flex flex-col font-sans">
-      <header className="bg-blue-600 text-white p-4 shadow-md flex justify-between items-center">
+      <header className="bg-blue-600 text-white p-4 shadow-md flex justify-between items-center gap-4">
         <h1 className="text-xl font-bold flex items-center gap-2">
           <Activity className="w-6 h-6" /> Acuifero 4 + Vigia
         </h1>
-        
-        <button 
+
+        <button
           onClick={toggleOffline}
           className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
             isOnline ? 'bg-green-500 hover:bg-green-400' : 'bg-red-500 hover:bg-red-400'
@@ -64,7 +57,7 @@ export default function Layout() {
         </button>
       </header>
 
-      <main className="flex-1 p-4 max-w-4xl mx-auto w-full">
+      <main className="flex-1 p-4 max-w-5xl mx-auto w-full">
         <Outlet />
       </main>
 
