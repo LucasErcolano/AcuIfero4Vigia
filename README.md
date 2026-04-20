@@ -43,6 +43,14 @@ Install and start the local runtime from the repo root:
 
 That installs Ollama under `tools/ollama`, starts the local API, and pulls `gemma4:e2b` by default.
 
+For local Linux development with one command, use:
+
+```bash
+./scripts/dev.sh
+```
+
+That script starts or reuses Ollama, seeds the backend, launches backend and frontend, writes logs under `backend/data/logs`, and stops both app servers on `Ctrl+C`.
+
 ## Demo assets
 
 Fetch or refresh the bundled demo clip and calibration frames:
@@ -146,6 +154,12 @@ cd frontend
 npm run dev -- --host 127.0.0.1 --port 5173
 ```
 
+Or start everything at once:
+
+```bash
+./scripts/dev.sh
+```
+
 Then validate the live stack from a third terminal:
 
 ```bash
@@ -170,7 +184,8 @@ Notes:
 
 - Run the seed before the smoke test, otherwise `silverado-fixed-cam-usgs` will not exist.
 - The first local LLM request can be noticeably slower while Ollama warms the model.
-- `parser_source` can be `llm` when the model returns valid JSON, or `rules` if the backend falls back to deterministic parsing.
+- With local Ollama, the backend first uses the native `/api/chat` JSON mode for Gemma and then falls back to the OpenAI-compatible endpoint.
+- `parser_source` should normally be `llm` on a healthy local Gemma setup, and falls back to `rules` only if the model times out or returns unusable output.
 
 ## Main API routes
 

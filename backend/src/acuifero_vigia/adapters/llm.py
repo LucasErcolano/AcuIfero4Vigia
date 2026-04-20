@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from urllib.parse import urlparse
 from typing import Any
 
 import httpx
@@ -48,6 +49,16 @@ class OpenAICompatibleLLM:
             "summary": "one concise sentence",
             "confidence": 0.0,
         }
+        prompt = (
+            f"Site context: {json.dumps(site_context, ensure_ascii=True)}\n"
+            f"Transcript: {transcript_text}\n"
+            f"Return JSON matching this template: {json.dumps(schema_hint, ensure_ascii=True)}"
+        )
+
+        native_payload = self._call_ollama_native(prompt)
+        if native_payload is not None:
+            return native_payload
+
         messages = [
             {
                 "role": "system",
@@ -58,16 +69,13 @@ class OpenAICompatibleLLM:
             },
             {
                 "role": "user",
-                "content": (
-                    f"Site context: {json.dumps(site_context, ensure_ascii=True)}\n"
-                    f"Transcript: {transcript_text}\n"
-                    f"Return JSON matching this template: {json.dumps(schema_hint, ensure_ascii=True)}"
-                ),
+                "content": prompt,
             },
         ]
         payload = {
             "model": self.settings.llm_model,
             "temperature": 0,
+            "max_tokens": 240,
             "messages": messages,
         }
         headers = {
@@ -88,6 +96,45 @@ class OpenAICompatibleLLM:
             return self._extract_json(content)
         except Exception:
             return None
+
+    def _call_ollama_native(self, prompt: str) -> dict[str, Any] | None:
+        if not self._looks_like_ollama():
+            return None
+
+        payload = {
+            "model": self.settings.llm_model,
+            "stream": False,
+            "format": "json",
+            "messages": [
+                {
+                    "role": "system",
+                    "content": (
+                        "Return only a JSON object. Do not wrap it in markdown. "
+                        "Use conservative unknown values when needed."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": prompt,
+                },
+            ],
+        }
+        try:
+            with httpx.Client(timeout=self.settings.llm_timeout_seconds) as client:
+                response = client.post(self._ollama_chat_url(), json=payload)
+                response.raise_for_status()
+            body = response.json()
+            content = body.get("message", {}).get("content")
+            return self._extract_json(content)
+        except Exception:
+            return None
+
+    def _looks_like_ollama(self) -> bool:
+        parsed = urlparse(self.settings.llm_base_url)
+        return parsed.hostname in {"127.0.0.1", "localhost"} and parsed.port == 11434
+
+    def _ollama_chat_url(self) -> str:
+        return self.settings.llm_base_url.rstrip("/").removesuffix("/v1") + "/api/chat"
 
     @staticmethod
     def _extract_json(content: Any) -> dict[str, Any] | None:
