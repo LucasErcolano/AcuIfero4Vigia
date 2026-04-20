@@ -1,11 +1,26 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { useAppStore, API_BASE } from '../store';
-import { Activity, FileText, UploadCloud, Wifi, WifiOff, Settings } from 'lucide-react';
-import { useEffect } from 'react';
+import { Activity, FileText, UploadCloud, Wifi, WifiOff, Settings, Siren, CheckCircle2 } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 
 export default function Layout() {
   const { isOnline, queueCount, checkConnectivity, setOnline } = useAppStore();
   const location = useLocation();
+  const wasOffline = useRef(false);
+  const prevQueue = useRef(queueCount);
+  const [flashSynced, setFlashSynced] = useState(false);
+
+  useEffect(() => {
+    if (!isOnline) {
+      wasOffline.current = true;
+    } else if (wasOffline.current && queueCount === 0 && prevQueue.current > 0) {
+      setFlashSynced(true);
+      const t = setTimeout(() => setFlashSynced(false), 2500);
+      wasOffline.current = false;
+      return () => clearTimeout(t);
+    }
+    prevQueue.current = queueCount;
+  }, [isOnline, queueCount]);
 
   useEffect(() => {
     checkConnectivity();
@@ -57,6 +72,17 @@ export default function Layout() {
         </button>
       </header>
 
+      {!isOnline && (
+        <div className="bg-red-600 text-white px-4 py-2 text-sm font-semibold flex items-center justify-center gap-2 animate-pulse">
+          <Siren className="w-4 h-4" />
+          SIN CONECTIVIDAD — operación local activa · cola: {queueCount}
+        </div>
+      )}
+      {flashSynced && (
+        <div className="bg-green-600 text-white px-4 py-2 text-sm font-semibold flex items-center justify-center gap-2">
+          <CheckCircle2 className="w-4 h-4" /> Sincronizado
+        </div>
+      )}
       <main className="flex-1 p-4 max-w-5xl mx-auto w-full">
         <Outlet />
       </main>
