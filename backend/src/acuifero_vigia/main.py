@@ -442,6 +442,54 @@ async def get_alert(alert_id: int, session: Session = Depends(get_session)) -> d
     return payload
 
 
+@app.post("/api/alerts/{alert_id}/export-sinagir")
+async def export_alert_sinagir(alert_id: int, session: Session = Depends(get_session)) -> dict[str, Any]:
+    alert = session.get(FusedAlert, alert_id)
+    if alert is None:
+        raise HTTPException(status_code=404, detail="Alert not found")
+    site = session.get(Site, alert.site_id)
+    try:
+        trace = json.loads(alert.decision_trace) if alert.decision_trace else []
+    except json.JSONDecodeError:
+        trace = []
+    try:
+        chain = json.loads(alert.reasoning_chain) if alert.reasoning_chain else []
+    except json.JSONDecodeError:
+        chain = []
+    return {
+        "schema": "sinagir-ready-v1",
+        "disclaimer": "Schema export only. Not submitted to SINAGIR production endpoints.",
+        "event": {
+            "external_id": f"acuifero-alert-{alert.id}",
+            "observed_at": alert.created_at.isoformat() if alert.created_at else None,
+            "site": {
+                "id": alert.site_id,
+                "name": site.name if site else alert.site_id,
+                "region": site.region if site else None,
+                "lat": site.lat if site else None,
+                "lng": site.lng if site else None,
+            },
+            "hazard_type": "inundacion",
+            "severity": {
+                "level": alert.level,
+                "score": alert.score,
+            },
+            "trigger_source": alert.trigger_source,
+            "summary": alert.summary,
+            "explanation": trace,
+            "reasoning": {
+                "summary": alert.reasoning_summary,
+                "chain": chain,
+                "model": alert.reasoning_model,
+            },
+            "local_actuation": {
+                "siren_triggered": alert.local_alarm_triggered,
+            },
+            "origin_system": "Acuifero 4 + Vigia (edge)",
+        },
+    }
+
+
 @app.post("/api/alerts/recompute")
 async def recompute_alerts(
     payload: RecomputeRequest,
