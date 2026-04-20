@@ -47,13 +47,32 @@ interface NodeAnalysisResponse {
     confidence: number;
     crossed_critical_line: boolean;
     evidence_frame_url?: string | null;
+    image_description?: string | null;
+    image_assessment_model?: string | null;
+    image_assessment_confidence?: number | null;
+    image_water_visible?: boolean | null;
+    image_infrastructure_at_risk?: boolean | null;
   };
   alert: {
+    id?: number;
     level: string;
     score: number;
     summary: string;
+    reasoning_summary?: string | null;
+    reasoning_chain?: string | null;
+    reasoning_model?: string | null;
   };
   sample_video_source_url?: string | null;
+}
+
+function parseChain(raw?: string | null): string[] {
+  if (!raw) return [];
+  try {
+    const v = JSON.parse(raw);
+    return Array.isArray(v) ? v.map((x) => String(x)) : [];
+  } catch {
+    return [];
+  }
 }
 
 function formatPercent(value: number) {
@@ -152,12 +171,13 @@ export default function SiteDetail() {
         method: 'POST',
       });
       if (!response.ok) {
-        throw new Error(await response.text());
+        const detail = await response.text();
+        throw new Error(detail || 'Hydromet refresh failed');
       }
       setSnapshot(await response.json());
     } catch (refreshError) {
       console.error(refreshError);
-      setError('Hydromet refresh failed. Check backend internet access.');
+      setError(refreshError instanceof Error ? refreshError.message : 'Hydromet refresh failed.');
     } finally {
       setIsRefreshing(false);
     }
@@ -379,6 +399,21 @@ export default function SiteDetail() {
                 <div className="capitalize">Level: {analysisResult.alert.level}</div>
                 <div>Score: {formatPercent(analysisResult.alert.score)}</div>
                 <div className="mt-2">{analysisResult.alert.summary}</div>
+                {analysisResult.alert.reasoning_summary && (
+                  <details className="mt-3 rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+                    <summary className="cursor-pointer font-semibold text-blue-800">
+                      Razonamiento de Gemma ({analysisResult.alert.reasoning_model ?? 'local'})
+                    </summary>
+                    <p className="mt-2 whitespace-pre-wrap">{analysisResult.alert.reasoning_summary}</p>
+                    {parseChain(analysisResult.alert.reasoning_chain).length > 0 && (
+                      <ol className="mt-2 list-decimal pl-5 text-xs text-blue-900/80">
+                        {parseChain(analysisResult.alert.reasoning_chain).map((step, i) => (
+                          <li key={i}>{step}</li>
+                        ))}
+                      </ol>
+                    )}
+                  </details>
+                )}
                 {analysisResult.sample_video_source_url && (
                   <div className="mt-3 flex items-center gap-2 text-xs text-gray-500">
                     <Video className="w-4 h-4" /> Sample source connected from the official provider page.
@@ -388,7 +423,22 @@ export default function SiteDetail() {
             </div>
             <div className="rounded-xl border border-gray-200 overflow-hidden bg-gray-50">
               {evidenceFrameUrl ? (
-                <img src={evidenceFrameUrl} alt="Evidence frame with calibration overlays" className="w-full object-cover" />
+                <div className="relative">
+                  <img src={evidenceFrameUrl} alt="Evidence frame with calibration overlays" className="w-full object-cover" />
+                  {analysisResult.observation.image_description && (
+                    <div className="absolute inset-x-0 bottom-0 bg-black/70 text-white text-xs px-3 py-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-semibold">
+                          Gemma ({analysisResult.observation.image_assessment_model ?? 'local'})
+                        </span>
+                        {typeof analysisResult.observation.image_assessment_confidence === 'number' && (
+                          <span>conf {formatPercent(analysisResult.observation.image_assessment_confidence)}</span>
+                        )}
+                      </div>
+                      <p className="mt-1 opacity-95">{analysisResult.observation.image_description}</p>
+                    </div>
+                  )}
+                </div>
               ) : (
                 <div className="h-full min-h-[240px] flex items-center justify-center text-sm text-gray-500 px-6 text-center">
                   The backend stored an analysis result, but no evidence frame URL was returned.

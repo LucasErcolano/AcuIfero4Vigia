@@ -47,6 +47,14 @@ export default function Dashboard() {
                     <span>Score: {(alert.score * 100).toFixed(0)}%</span>
                     {alert.trigger_source && <span>Source: {alert.trigger_source}</span>}
                   </div>
+                  {alert.reasoning_summary && (
+                    <details className="mt-2 text-xs">
+                      <summary className="cursor-pointer font-semibold">
+                        Razonamiento de Gemma ({alert.reasoning_model ?? 'local'})
+                      </summary>
+                      <p className="mt-1 whitespace-pre-wrap opacity-90">{alert.reasoning_summary}</p>
+                    </details>
+                  )}
                 </div>
               </div>
             ))}

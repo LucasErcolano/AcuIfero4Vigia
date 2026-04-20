@@ -46,6 +46,11 @@ class NodeObservation(SQLModel, table=True):
     evidence_frame_path: Optional[str] = None
     analysis_mode: str = "temporal-gradient"
     sync_status: str = "pending"
+    image_description: Optional[str] = None
+    image_assessment_model: Optional[str] = None
+    image_assessment_confidence: Optional[float] = None
+    image_water_visible: Optional[bool] = None
+    image_infrastructure_at_risk: Optional[bool] = None
 
 
 class VolunteerReport(SQLModel, table=True):
@@ -107,6 +112,9 @@ class FusedAlert(SQLModel, table=True):
     decision_trace: str
     local_alarm_triggered: bool = False
     sync_status: str = "pending"
+    reasoning_summary: Optional[str] = None
+    reasoning_chain: Optional[str] = None
+    reasoning_model: Optional[str] = None
 
 
 class SyncQueueItem(SQLModel, table=True):

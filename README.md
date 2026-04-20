@@ -1,5 +1,31 @@
 # Acuifero 4 + Vigia
 
+Hybrid flood early-warning system for Argentina's Litoral — fixed-camera CV
+nodes + offline-first volunteer reports + a local decision engine with
+auditable Gemma reasoning. Submitted to the Gemma 4 Good Hackathon (Global
+Resilience track, LiteRT Prize).
+
+## What makes this different
+
+1. **Auditable thinking-mode chain** — every non-green `FusedAlert` carries a Spanish-language `reasoning_summary` + `chain_of_thought` from on-device Gemma, alongside the deterministic rule trace. See [`docs/hackathon/thinking-mode.md`](docs/hackathon/thinking-mode.md).
+2. **Multimodal evidence narration** — fixed-node evidence frames are described in Spanish by Gemma (E2B/E4B via Ollama). Explanatory only; CV remains the authoritative severity signal. See [`docs/hackathon/multimodal-comparison.md`](docs/hackathon/multimodal-comparison.md).
+3. **Rioplatense hydro understanding** — 82-example labeled corpus + 12-shot prompt beats rule-based baseline on Litoral colloquial phrases. See [`docs/hackathon/rioplatense_eval.md`](docs/hackathon/rioplatense_eval.md).
+4. **SINAGIR-ready export** — `POST /api/alerts/{id}/export-sinagir` emits a documented schema mapped to Argentina's national disaster registry. See [`docs/hackathon/sinagir-mapping.md`](docs/hackathon/sinagir-mapping.md).
+5. **On-device Android volunteer flow** — MediaPipe LLM Inference wrapper parses reports fully on-device (no silent backend fallback). See [`docs/hackathon/android_gemma.md`](docs/hackathon/android_gemma.md).
+
+Connectivity-loss demo: [`scripts/demo_connectivity.py`](scripts/demo_connectivity.py) runs the full `wifi-off → local alert → siren → wifi-on → queue drain` narrative in under 90 s.
+
+## Known limitations
+
+- Android on-device Gemma was not validated on a physical device (no SDK on dev machine); code + build doc ships, developer runs the APK.
+- LoRA fine-tune track from the corpus was not attempted (8 GB dev RAM, no CUDA). Production runtime uses the few-shot prompt path, which does not depend on LoRA.
+- Real SINAGIR API integration, real LoRa hardware, real GPIO relays are out of scope. Simulators stand in.
+- `gemma4:e4b` may be too tight on some 12 GB systems; adapter auto-falls back to `gemma4:e2b`.
+
+---
+
+## Overview (original MVP surface)
+
 Browser-first flood early-warning MVP with three real signal paths:
 
 - fixed-node video analysis using OpenCV over real clips
@@ -113,6 +139,21 @@ cd frontend
 npm install
 npm run dev -- --host 127.0.0.1 --port 5173
 ```
+
+### Android
+
+There is now an Android app module under `android/` on the `develop` branch.
+
+Current Android MVP scope:
+
+- Compose app with dashboard, alerts, sites and detail screens
+- sample-node analysis against the real backend
+- volunteer report submission
+- offline Room queue with manual flush and startup sync worker
+- numeric calibration form
+- configurable backend base URL for emulator or physical device
+
+Open `android/` in Android Studio. For emulator use the default backend URL `http://10.0.2.2:8000/api/`. For a physical device, change it from the in-app Settings screen to your machine LAN IP.
 
 ## Demo flow
 

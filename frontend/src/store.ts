@@ -39,6 +39,9 @@ export interface FusedAlert {
   summary: string;
   created_at: string;
   trigger_source?: string;
+  reasoning_summary?: string | null;
+  reasoning_chain?: string | null;
+  reasoning_model?: string | null;
 }
 
 interface AppState {

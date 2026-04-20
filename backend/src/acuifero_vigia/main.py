@@ -4,12 +4,16 @@ import json
 from contextlib import asynccontextmanager
 from typing import Any, Type
 
+from pathlib import Path
+
 from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlmodel import Session, SQLModel, select
 
+from acuifero_vigia.adapters.image_assessment import GemmaImageAssessmentAdapter
 from acuifero_vigia.adapters.llm import OpenAICompatibleLLM
+from acuifero_vigia.adapters.text_structuring_gemma_fewshot import GemmaFewShotTextStructurer
 from acuifero_vigia.core.settings import get_settings
 from acuifero_vigia.db.database import get_central_session, get_session, init_db
 from acuifero_vigia.models.domain import (
@@ -64,6 +68,8 @@ app.mount("/uploads", StaticFiles(directory=str(get_upload_dir())), name="upload
 app.mount("/fixtures", StaticFiles(directory=str(get_fixture_dir())), name="fixtures")
 
 llm_client = OpenAICompatibleLLM()
+text_structurer = GemmaFewShotTextStructurer(llm_client)
+image_assessor = GemmaImageAssessmentAdapter()
 external_data_service = ExternalDataService()
 node_analyzer = NodeAnalyzer()
 is_online = True
@@ -80,6 +86,19 @@ def _serialize_observation(observation: NodeObservation) -> dict[str, Any]:
     payload = observation.model_dump(mode="json")
     payload["evidence_frame_url"] = public_asset_url_for_path(observation.evidence_frame_path)
     return payload
+
+
+def _serialize_external_snapshot(snapshot: HydrometSnapshot) -> ExternalSnapshotResponse:
+    return ExternalSnapshotResponse(
+        site_id=snapshot.site_id,
+        signal_score=snapshot.signal_score,
+        summary=snapshot.summary,
+        precipitation_mm=snapshot.precipitation_mm,
+        precipitation_probability=snapshot.precipitation_probability,
+        river_discharge=snapshot.river_discharge,
+        river_discharge_max=snapshot.river_discharge_max,
+        river_discharge_trend=snapshot.river_discharge_trend,
+    )
 
 
 def _create_node_observation(
@@ -105,11 +124,29 @@ def _create_node_observation(
         evidence_frame_path=result.evidence_frame_path,
         analysis_mode="banded-window-v1",
     )
+
+    should_assess = (
+        result.evidence_frame_path is not None
+        and (result.crossed_critical_line or result.severity_score >= 0.5)
+    )
+    if should_assess:
+        frame_path = resolve_local_asset_path(result.evidence_frame_path) or Path(result.evidence_frame_path)
+        try:
+            assessment = image_assessor.assess(frame_path)
+        except Exception:
+            assessment = None
+        if assessment is not None:
+            observation.image_description = assessment.description_es
+            observation.image_assessment_model = assessment.model_name
+            observation.image_assessment_confidence = assessment.confidence
+            observation.image_water_visible = assessment.water_visible
+            observation.image_infrastructure_at_risk = assessment.infrastructure_at_risk
+
     session.add(observation)
     session.flush()
     _enqueue_entity(session, "node_observation", observation)
 
-    alert = recompute_site_alert(session, site_id)
+    alert = recompute_site_alert(session, site_id, llm_client)
     session.flush()
     _enqueue_entity(session, "fused_alert", alert)
     session.commit()
@@ -206,7 +243,7 @@ async def get_latest_external_snapshot(site_id: str, session: Session = Depends(
     ).first()
     if snapshot is None:
         raise HTTPException(status_code=404, detail="No hydromet snapshot stored for site")
-    return ExternalSnapshotResponse.model_validate(snapshot.model_dump())
+    return _serialize_external_snapshot(snapshot)
 
 
 @app.post("/api/sites/{site_id}/external-snapshot/refresh", response_model=ExternalSnapshotResponse)
@@ -223,11 +260,12 @@ async def refresh_external_snapshot(site_id: str, session: Session = Depends(get
     session.add(snapshot)
     session.flush()
     _enqueue_entity(session, "hydromet_snapshot", snapshot)
-    alert = recompute_site_alert(session, site_id)
+    alert = recompute_site_alert(session, site_id, llm_client)
     session.flush()
     _enqueue_entity(session, "fused_alert", alert)
     session.commit()
-    return ExternalSnapshotResponse.model_validate(snapshot.model_dump())
+    session.refresh(snapshot)
+    return _serialize_external_snapshot(snapshot)
 
 
 @app.post("/api/node/analyze")
@@ -261,6 +299,24 @@ async def analyze_node(
         print(f"!!! LOCAL ALARM TRIGGERED FOR SITE {site_id} VIA NODE ANALYSIS !!!")
 
     return {"observation": _serialize_observation(observation), "alert": alert}
+
+
+@app.post("/api/node/explain-frame")
+async def explain_frame(frame: UploadFile = File(...)) -> dict[str, Any]:
+    path = persist_upload(frame, "frame")
+    if not path:
+        raise HTTPException(status_code=400, detail="frame upload failed")
+    assessment = image_assessor.assess(path)
+    if assessment is None:
+        raise HTTPException(status_code=503, detail="Image assessment unavailable (LLM down or invalid output)")
+    return {
+        "description_es": assessment.description_es,
+        "water_visible": assessment.water_visible,
+        "infrastructure_at_risk": assessment.infrastructure_at_risk,
+        "confidence": assessment.confidence,
+        "model_name": assessment.model_name,
+        "frame_url": public_asset_url_for_path(path),
+    }
 
 
 @app.post("/api/sites/{site_id}/sample-node-analysis")
@@ -325,7 +381,7 @@ async def create_report(
     session.flush()
     _enqueue_entity(session, "volunteer_report", report)
 
-    structured = structure_report(transcript_text, site, llm_client)
+    structured = structure_report(transcript_text, site, text_structurer)
     parsed = ParsedObservation(
         volunteer_report_id=report.id or 0,
         water_level_category=structured.water_level_category,
@@ -345,7 +401,7 @@ async def create_report(
     session.flush()
     _enqueue_entity(session, "parsed_observation", parsed)
 
-    alert = recompute_site_alert(session, site_id)
+    alert = recompute_site_alert(session, site_id, llm_client)
     session.flush()
     _enqueue_entity(session, "fused_alert", alert)
     session.commit()
@@ -369,6 +425,71 @@ async def get_alerts(session: Session = Depends(get_session)) -> list[FusedAlert
     return session.exec(select(FusedAlert).order_by(FusedAlert.created_at.desc())).all()
 
 
+@app.get("/api/alerts/{alert_id}")
+async def get_alert(alert_id: int, session: Session = Depends(get_session)) -> dict[str, Any]:
+    alert = session.get(FusedAlert, alert_id)
+    if alert is None:
+        raise HTTPException(status_code=404, detail="Alert not found")
+    payload = alert.model_dump(mode="json")
+    try:
+        payload["reasoning_chain_parsed"] = json.loads(alert.reasoning_chain) if alert.reasoning_chain else []
+    except json.JSONDecodeError:
+        payload["reasoning_chain_parsed"] = []
+    try:
+        payload["decision_trace_parsed"] = json.loads(alert.decision_trace) if alert.decision_trace else []
+    except json.JSONDecodeError:
+        payload["decision_trace_parsed"] = []
+    return payload
+
+
+@app.post("/api/alerts/{alert_id}/export-sinagir")
+async def export_alert_sinagir(alert_id: int, session: Session = Depends(get_session)) -> dict[str, Any]:
+    alert = session.get(FusedAlert, alert_id)
+    if alert is None:
+        raise HTTPException(status_code=404, detail="Alert not found")
+    site = session.get(Site, alert.site_id)
+    try:
+        trace = json.loads(alert.decision_trace) if alert.decision_trace else []
+    except json.JSONDecodeError:
+        trace = []
+    try:
+        chain = json.loads(alert.reasoning_chain) if alert.reasoning_chain else []
+    except json.JSONDecodeError:
+        chain = []
+    return {
+        "schema": "sinagir-ready-v1",
+        "disclaimer": "Schema export only. Not submitted to SINAGIR production endpoints.",
+        "event": {
+            "external_id": f"acuifero-alert-{alert.id}",
+            "observed_at": alert.created_at.isoformat() if alert.created_at else None,
+            "site": {
+                "id": alert.site_id,
+                "name": site.name if site else alert.site_id,
+                "region": site.region if site else None,
+                "lat": site.lat if site else None,
+                "lng": site.lng if site else None,
+            },
+            "hazard_type": "inundacion",
+            "severity": {
+                "level": alert.level,
+                "score": alert.score,
+            },
+            "trigger_source": alert.trigger_source,
+            "summary": alert.summary,
+            "explanation": trace,
+            "reasoning": {
+                "summary": alert.reasoning_summary,
+                "chain": chain,
+                "model": alert.reasoning_model,
+            },
+            "local_actuation": {
+                "siren_triggered": alert.local_alarm_triggered,
+            },
+            "origin_system": "Acuifero 4 + Vigia (edge)",
+        },
+    }
+
+
 @app.post("/api/alerts/recompute")
 async def recompute_alerts(
     payload: RecomputeRequest,
@@ -377,7 +498,7 @@ async def recompute_alerts(
     site_ids = [payload.site_id] if payload.site_id else [site.id for site in session.exec(select(Site)).all()]
     results: list[dict[str, object]] = []
     for site_id in site_ids:
-        alert = recompute_site_alert(session, site_id)
+        alert = recompute_site_alert(session, site_id, llm_client)
         session.flush()
         _enqueue_entity(session, "fused_alert", alert)
         results.append({"site_id": site_id, "score": alert.score, "level": alert.level})
