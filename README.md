@@ -114,6 +114,21 @@ npm install
 npm run dev -- --host 127.0.0.1 --port 5173
 ```
 
+### Android
+
+There is now an Android app module under `android/` on the `develop` branch.
+
+Current Android MVP scope:
+
+- Compose app with dashboard, alerts, sites and detail screens
+- sample-node analysis against the real backend
+- volunteer report submission
+- offline Room queue with manual flush and startup sync worker
+- numeric calibration form
+- configurable backend base URL for emulator or physical device
+
+Open `android/` in Android Studio. For emulator use the default backend URL `http://10.0.2.2:8000/api/`. For a physical device, change it from the in-app Settings screen to your machine LAN IP.
+
 ## Demo flow
 
 1. Start backend and frontend.
