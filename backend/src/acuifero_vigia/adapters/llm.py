@@ -97,6 +97,62 @@ class OpenAICompatibleLLM:
         except Exception:
             return None
 
+    def generate_text(self, system_prompt: str, user_prompt: str, max_tokens: int = 320) -> str | None:
+        """Plain-text generation for reasoning chains. Returns None if LLM unavailable."""
+        if not self.settings.llm_enabled:
+            return None
+
+        if self._looks_like_ollama():
+            try:
+                with httpx.Client(timeout=self.settings.llm_timeout_seconds) as client:
+                    response = client.post(
+                        self._ollama_chat_url(),
+                        json={
+                            "model": self.settings.llm_model,
+                            "stream": False,
+                            "messages": [
+                                {"role": "system", "content": system_prompt},
+                                {"role": "user", "content": user_prompt},
+                            ],
+                            "options": {"temperature": 0.2, "num_predict": max_tokens},
+                        },
+                    )
+                    response.raise_for_status()
+                body = response.json()
+                content = body.get("message", {}).get("content")
+                if isinstance(content, str) and content.strip():
+                    return content.strip()
+            except Exception:
+                pass
+
+        try:
+            with httpx.Client(timeout=self.settings.llm_timeout_seconds) as client:
+                response = client.post(
+                    f"{self.settings.llm_base_url.rstrip('/')}/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {self.settings.llm_api_key}",
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "model": self.settings.llm_model,
+                        "temperature": 0.2,
+                        "max_tokens": max_tokens,
+                        "messages": [
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": user_prompt},
+                        ],
+                    },
+                )
+                response.raise_for_status()
+            body = response.json()
+            content = body["choices"][0]["message"]["content"]
+            if isinstance(content, list):
+                content = "".join(p.get("text", "") for p in content if isinstance(p, dict))
+            content = str(content).strip()
+            return content or None
+        except Exception:
+            return None
+
     def _call_ollama_native(self, prompt: str) -> dict[str, Any] | None:
         if not self._looks_like_ollama():
             return None

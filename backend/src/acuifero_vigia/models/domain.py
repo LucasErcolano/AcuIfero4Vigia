@@ -107,6 +107,9 @@ class FusedAlert(SQLModel, table=True):
     decision_trace: str
     local_alarm_triggered: bool = False
     sync_status: str = "pending"
+    reasoning_summary: Optional[str] = None
+    reasoning_chain: Optional[str] = None
+    reasoning_model: Optional[str] = None
 
 
 class SyncQueueItem(SQLModel, table=True):

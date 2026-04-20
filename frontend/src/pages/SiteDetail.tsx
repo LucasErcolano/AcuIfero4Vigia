@@ -49,11 +49,25 @@ interface NodeAnalysisResponse {
     evidence_frame_url?: string | null;
   };
   alert: {
+    id?: number;
     level: string;
     score: number;
     summary: string;
+    reasoning_summary?: string | null;
+    reasoning_chain?: string | null;
+    reasoning_model?: string | null;
   };
   sample_video_source_url?: string | null;
+}
+
+function parseChain(raw?: string | null): string[] {
+  if (!raw) return [];
+  try {
+    const v = JSON.parse(raw);
+    return Array.isArray(v) ? v.map((x) => String(x)) : [];
+  } catch {
+    return [];
+  }
 }
 
 function formatPercent(value: number) {
@@ -380,6 +394,21 @@ export default function SiteDetail() {
                 <div className="capitalize">Level: {analysisResult.alert.level}</div>
                 <div>Score: {formatPercent(analysisResult.alert.score)}</div>
                 <div className="mt-2">{analysisResult.alert.summary}</div>
+                {analysisResult.alert.reasoning_summary && (
+                  <details className="mt-3 rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+                    <summary className="cursor-pointer font-semibold text-blue-800">
+                      Razonamiento de Gemma ({analysisResult.alert.reasoning_model ?? 'local'})
+                    </summary>
+                    <p className="mt-2 whitespace-pre-wrap">{analysisResult.alert.reasoning_summary}</p>
+                    {parseChain(analysisResult.alert.reasoning_chain).length > 0 && (
+                      <ol className="mt-2 list-decimal pl-5 text-xs text-blue-900/80">
+                        {parseChain(analysisResult.alert.reasoning_chain).map((step, i) => (
+                          <li key={i}>{step}</li>
+                        ))}
+                      </ol>
+                    )}
+                  </details>
+                )}
                 {analysisResult.sample_video_source_url && (
                   <div className="mt-3 flex items-center gap-2 text-xs text-gray-500">
                     <Video className="w-4 h-4" /> Sample source connected from the official provider page.

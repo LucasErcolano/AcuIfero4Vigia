@@ -54,6 +54,9 @@ data class AlertSummary(
     val score: Double,
     val summary: String,
     @SerializedName("created_at") val createdAt: String,
+    @SerializedName("reasoning_summary") val reasoningSummary: String? = null,
+    @SerializedName("reasoning_chain") val reasoningChain: String? = null,
+    @SerializedName("reasoning_model") val reasoningModel: String? = null,
 )
 
 data class CalibrationResponse(
