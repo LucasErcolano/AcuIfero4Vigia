@@ -17,6 +17,7 @@ from acuifero_vigia.core import settings as settings_module
 from acuifero_vigia.db.database import central_engine, edge_engine, init_db
 from acuifero_vigia.main import analyze_node, app, create_report, flush_sync
 from acuifero_vigia.models.domain import FusedAlert, NodeObservation, Site, SiteCalibration, SyncQueueItem, VolunteerReport
+from acuifero_vigia.models.domain import HydrometSnapshot
 from acuifero_vigia.services.storage import get_upload_dir
 
 init_db()
@@ -242,3 +243,25 @@ def test_sample_node_analysis_endpoint(tmp_path: Path):
     assert payload["observation"]["frames_analyzed"] >= 3
     assert payload["observation"]["evidence_frame_url"].startswith("/uploads/")
     assert payload["sample_video_source_url"] == "https://example.com/fixed-cam"
+
+
+def test_external_snapshot_refresh_serializes_response(monkeypatch: pytest.MonkeyPatch):
+    snapshot = HydrometSnapshot(
+        site_id="test-site",
+        signal_score=0.42,
+        summary="rain now 2.0 mm, 12h precip prob 60%",
+        precipitation_mm=2.0,
+        precipitation_probability=60.0,
+        river_discharge=12.0,
+        river_discharge_max=18.0,
+        river_discharge_trend=1.5,
+    )
+
+    monkeypatch.setattr(main_module.external_data_service, "fetch_snapshot", lambda _site: snapshot)
+
+    response = request("POST", "/api/sites/test-site/external-snapshot/refresh")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["site_id"] == "test-site"
+    assert payload["signal_score"] == 0.42
+    assert payload["summary"] == "rain now 2.0 mm, 12h precip prob 60%"

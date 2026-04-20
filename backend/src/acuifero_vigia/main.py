@@ -82,6 +82,19 @@ def _serialize_observation(observation: NodeObservation) -> dict[str, Any]:
     return payload
 
 
+def _serialize_external_snapshot(snapshot: HydrometSnapshot) -> ExternalSnapshotResponse:
+    return ExternalSnapshotResponse(
+        site_id=snapshot.site_id,
+        signal_score=snapshot.signal_score,
+        summary=snapshot.summary,
+        precipitation_mm=snapshot.precipitation_mm,
+        precipitation_probability=snapshot.precipitation_probability,
+        river_discharge=snapshot.river_discharge,
+        river_discharge_max=snapshot.river_discharge_max,
+        river_discharge_trend=snapshot.river_discharge_trend,
+    )
+
+
 def _create_node_observation(
     session: Session,
     site_id: str,
@@ -206,7 +219,7 @@ async def get_latest_external_snapshot(site_id: str, session: Session = Depends(
     ).first()
     if snapshot is None:
         raise HTTPException(status_code=404, detail="No hydromet snapshot stored for site")
-    return ExternalSnapshotResponse.model_validate(snapshot.model_dump())
+    return _serialize_external_snapshot(snapshot)
 
 
 @app.post("/api/sites/{site_id}/external-snapshot/refresh", response_model=ExternalSnapshotResponse)
@@ -227,7 +240,8 @@ async def refresh_external_snapshot(site_id: str, session: Session = Depends(get
     session.flush()
     _enqueue_entity(session, "fused_alert", alert)
     session.commit()
-    return ExternalSnapshotResponse.model_validate(snapshot.model_dump())
+    session.refresh(snapshot)
+    return _serialize_external_snapshot(snapshot)
 
 
 @app.post("/api/node/analyze")

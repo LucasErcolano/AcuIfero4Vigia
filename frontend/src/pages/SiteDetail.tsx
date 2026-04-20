@@ -152,12 +152,13 @@ export default function SiteDetail() {
         method: 'POST',
       });
       if (!response.ok) {
-        throw new Error(await response.text());
+        const detail = await response.text();
+        throw new Error(detail || 'Hydromet refresh failed');
       }
       setSnapshot(await response.json());
     } catch (refreshError) {
       console.error(refreshError);
-      setError('Hydromet refresh failed. Check backend internet access.');
+      setError(refreshError instanceof Error ? refreshError.message : 'Hydromet refresh failed.');
     } finally {
       setIsRefreshing(false);
     }
