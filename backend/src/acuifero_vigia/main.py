@@ -122,7 +122,7 @@ def _create_node_observation(
     session.flush()
     _enqueue_entity(session, "node_observation", observation)
 
-    alert = recompute_site_alert(session, site_id)
+    alert = recompute_site_alert(session, site_id, llm_client)
     session.flush()
     _enqueue_entity(session, "fused_alert", alert)
     session.commit()
@@ -236,7 +236,7 @@ async def refresh_external_snapshot(site_id: str, session: Session = Depends(get
     session.add(snapshot)
     session.flush()
     _enqueue_entity(session, "hydromet_snapshot", snapshot)
-    alert = recompute_site_alert(session, site_id)
+    alert = recompute_site_alert(session, site_id, llm_client)
     session.flush()
     _enqueue_entity(session, "fused_alert", alert)
     session.commit()
@@ -359,7 +359,7 @@ async def create_report(
     session.flush()
     _enqueue_entity(session, "parsed_observation", parsed)
 
-    alert = recompute_site_alert(session, site_id)
+    alert = recompute_site_alert(session, site_id, llm_client)
     session.flush()
     _enqueue_entity(session, "fused_alert", alert)
     session.commit()
@@ -383,6 +383,23 @@ async def get_alerts(session: Session = Depends(get_session)) -> list[FusedAlert
     return session.exec(select(FusedAlert).order_by(FusedAlert.created_at.desc())).all()
 
 
+@app.get("/api/alerts/{alert_id}")
+async def get_alert(alert_id: int, session: Session = Depends(get_session)) -> dict[str, Any]:
+    alert = session.get(FusedAlert, alert_id)
+    if alert is None:
+        raise HTTPException(status_code=404, detail="Alert not found")
+    payload = alert.model_dump(mode="json")
+    try:
+        payload["reasoning_chain_parsed"] = json.loads(alert.reasoning_chain) if alert.reasoning_chain else []
+    except json.JSONDecodeError:
+        payload["reasoning_chain_parsed"] = []
+    try:
+        payload["decision_trace_parsed"] = json.loads(alert.decision_trace) if alert.decision_trace else []
+    except json.JSONDecodeError:
+        payload["decision_trace_parsed"] = []
+    return payload
+
+
 @app.post("/api/alerts/recompute")
 async def recompute_alerts(
     payload: RecomputeRequest,
@@ -391,7 +408,7 @@ async def recompute_alerts(
     site_ids = [payload.site_id] if payload.site_id else [site.id for site in session.exec(select(Site)).all()]
     results: list[dict[str, object]] = []
     for site_id in site_ids:
-        alert = recompute_site_alert(session, site_id)
+        alert = recompute_site_alert(session, site_id, llm_client)
         session.flush()
         _enqueue_entity(session, "fused_alert", alert)
         results.append({"site_id": site_id, "score": alert.score, "level": alert.level})

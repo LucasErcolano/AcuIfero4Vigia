@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -35,6 +36,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -256,6 +258,32 @@ private fun AlertCard(alert: AlertSummary) {
             }
             Text(alert.summary, fontWeight = FontWeight.Medium)
             Text("score=${String.format("%.2f", alert.score)} | ${alert.createdAt}", style = MaterialTheme.typography.bodySmall)
+            ReasoningPanel(alert)
+        }
+    }
+}
+
+@Composable
+private fun ReasoningPanel(alert: AlertSummary) {
+    val summary = alert.reasoningSummary ?: return
+    var expanded by remember { mutableStateOf(false) }
+    Column {
+        TextButton(onClick = { expanded = !expanded }, contentPadding = PaddingValues(0.dp)) {
+            Text(
+                if (expanded) "Ocultar razonamiento de Gemma" else "Razonamiento de Gemma (${alert.reasoningModel ?: "local"})",
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
+        if (expanded) {
+            Text(summary, style = MaterialTheme.typography.bodySmall)
+            val chain = alert.reasoningChain
+            if (!chain.isNullOrBlank()) {
+                Text(
+                    chain.trim('[', ']').replace("\"", ""),
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
         }
     }
 }
