@@ -69,6 +69,12 @@ dependencies {
     implementation("androidx.work:work-runtime-ktx:2.9.1")
     implementation("io.coil-kt:coil-compose:2.7.0")
 
+    // On-device Gemma via MediaPipe LLM Inference (requires a gemma4-e2b .task file).
+    // The Kotlin glue in data/GemmaOnDevice.kt compiles without this dep (uses reflection) so
+    // the hackathon CI still builds on machines without Google's maven mirror; enable the dep
+    // locally before bundling a real .task asset.
+    // implementation("com.google.mediapipe:tasks-genai:0.10.14")
+
     debugImplementation(composeBom)
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
