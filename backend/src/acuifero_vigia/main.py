@@ -4,11 +4,14 @@ import json
 from contextlib import asynccontextmanager
 from typing import Any, Type
 
+from pathlib import Path
+
 from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlmodel import Session, SQLModel, select
 
+from acuifero_vigia.adapters.image_assessment import GemmaImageAssessmentAdapter
 from acuifero_vigia.adapters.llm import OpenAICompatibleLLM
 from acuifero_vigia.core.settings import get_settings
 from acuifero_vigia.db.database import get_central_session, get_session, init_db
@@ -64,6 +67,7 @@ app.mount("/uploads", StaticFiles(directory=str(get_upload_dir())), name="upload
 app.mount("/fixtures", StaticFiles(directory=str(get_fixture_dir())), name="fixtures")
 
 llm_client = OpenAICompatibleLLM()
+image_assessor = GemmaImageAssessmentAdapter()
 external_data_service = ExternalDataService()
 node_analyzer = NodeAnalyzer()
 is_online = True
@@ -118,6 +122,24 @@ def _create_node_observation(
         evidence_frame_path=result.evidence_frame_path,
         analysis_mode="banded-window-v1",
     )
+
+    should_assess = (
+        result.evidence_frame_path is not None
+        and (result.crossed_critical_line or result.severity_score >= 0.5)
+    )
+    if should_assess:
+        frame_path = resolve_local_asset_path(result.evidence_frame_path) or Path(result.evidence_frame_path)
+        try:
+            assessment = image_assessor.assess(frame_path)
+        except Exception:
+            assessment = None
+        if assessment is not None:
+            observation.image_description = assessment.description_es
+            observation.image_assessment_model = assessment.model_name
+            observation.image_assessment_confidence = assessment.confidence
+            observation.image_water_visible = assessment.water_visible
+            observation.image_infrastructure_at_risk = assessment.infrastructure_at_risk
+
     session.add(observation)
     session.flush()
     _enqueue_entity(session, "node_observation", observation)
@@ -275,6 +297,24 @@ async def analyze_node(
         print(f"!!! LOCAL ALARM TRIGGERED FOR SITE {site_id} VIA NODE ANALYSIS !!!")
 
     return {"observation": _serialize_observation(observation), "alert": alert}
+
+
+@app.post("/api/node/explain-frame")
+async def explain_frame(frame: UploadFile = File(...)) -> dict[str, Any]:
+    path = persist_upload(frame, "frame")
+    if not path:
+        raise HTTPException(status_code=400, detail="frame upload failed")
+    assessment = image_assessor.assess(path)
+    if assessment is None:
+        raise HTTPException(status_code=503, detail="Image assessment unavailable (LLM down or invalid output)")
+    return {
+        "description_es": assessment.description_es,
+        "water_visible": assessment.water_visible,
+        "infrastructure_at_risk": assessment.infrastructure_at_risk,
+        "confidence": assessment.confidence,
+        "model_name": assessment.model_name,
+        "frame_url": public_asset_url_for_path(path),
+    }
 
 
 @app.post("/api/sites/{site_id}/sample-node-analysis")
