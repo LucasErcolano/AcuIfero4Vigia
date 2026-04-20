@@ -13,6 +13,7 @@ from sqlmodel import Session, SQLModel, select
 
 from acuifero_vigia.adapters.image_assessment import GemmaImageAssessmentAdapter
 from acuifero_vigia.adapters.llm import OpenAICompatibleLLM
+from acuifero_vigia.adapters.text_structuring_gemma_fewshot import GemmaFewShotTextStructurer
 from acuifero_vigia.core.settings import get_settings
 from acuifero_vigia.db.database import get_central_session, get_session, init_db
 from acuifero_vigia.models.domain import (
@@ -67,6 +68,7 @@ app.mount("/uploads", StaticFiles(directory=str(get_upload_dir())), name="upload
 app.mount("/fixtures", StaticFiles(directory=str(get_fixture_dir())), name="fixtures")
 
 llm_client = OpenAICompatibleLLM()
+text_structurer = GemmaFewShotTextStructurer(llm_client)
 image_assessor = GemmaImageAssessmentAdapter()
 external_data_service = ExternalDataService()
 node_analyzer = NodeAnalyzer()
@@ -379,7 +381,7 @@ async def create_report(
     session.flush()
     _enqueue_entity(session, "volunteer_report", report)
 
-    structured = structure_report(transcript_text, site, llm_client)
+    structured = structure_report(transcript_text, site, text_structurer)
     parsed = ParsedObservation(
         volunteer_report_id=report.id or 0,
         water_level_category=structured.water_level_category,
