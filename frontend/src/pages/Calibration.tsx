@@ -1,259 +1,261 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { API_BASE } from '../store';
-import { LoaderCircle, Save } from 'lucide-react';
+import { LoaderCircle, Save, Undo2 } from 'lucide-react';
 
-function parsePoints(raw?: string | null) {
-  if (!raw) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(raw) as number[][];
-  } catch {
-    return null;
-  }
-}
-
-function getBoundingBox(points?: number[][] | null) {
-  if (!points || points.length === 0) {
-    return null;
-  }
-  const xs = points.map((point) => point[0]);
-  const ys = points.map((point) => point[1]);
-  return {
-    width: Math.max(...xs),
-    height: Math.max(...ys),
-    top: Math.min(...ys),
-    bottom: Math.max(...ys),
-  };
-}
+type Mode = 'roi' | 'critical' | 'reference' | 'done';
 
 function toAssetUrl(assetPath?: string | null) {
-  if (!assetPath) {
-    return null;
-  }
-  if (assetPath.startsWith('http://') || assetPath.startsWith('https://')) {
-    return assetPath;
-  }
-  const apiOrigin = API_BASE.replace(/\/api\/?$/, '');
-  return `${apiOrigin}${assetPath}`;
+  if (!assetPath) return null;
+  if (assetPath.startsWith('http://') || assetPath.startsWith('https://')) return assetPath;
+  return `${API_BASE.replace(/\/api\/?$/, '')}${assetPath}`;
 }
 
 export default function Calibration() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [frameWidth, setFrameWidth] = useState(640);
-  const [frameHeight, setFrameHeight] = useState(480);
-  const [roiTop, setRoiTop] = useState(40);
-  const [roiBottom, setRoiBottom] = useState(430);
-  const [criticalY, setCriticalY] = useState(170);
-  const [referenceY, setReferenceY] = useState(260);
-  const [notes, setNotes] = useState('');
+  const imgRef = useRef<HTMLImageElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
   const [sampleFrameUrl, setSampleFrameUrl] = useState<string | null>(null);
-  const [sampleVideoSourceUrl, setSampleVideoSourceUrl] = useState<string | null>(null);
+  const [naturalSize, setNaturalSize] = useState({ w: 640, h: 480 });
+  const [mode, setMode] = useState<Mode>('roi');
+  const [roi, setRoi] = useState<number[][]>([]);
+  const [criticalLine, setCriticalLine] = useState<number[][]>([]);
+  const [referenceLine, setReferenceLine] = useState<number[][]>([]);
+  const [notes, setNotes] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!id) {
-      return;
-    }
-
-    const loadCalibration = async () => {
+    if (!id) return;
+    (async () => {
       try {
-        const [siteResponse, calibrationResponse] = await Promise.all([
+        const [siteRes, calRes] = await Promise.all([
           fetch(`${API_BASE}/sites/${id}`),
           fetch(`${API_BASE}/sites/${id}/calibration`),
         ]);
-
-        if (siteResponse.ok) {
-          const sitePayload = await siteResponse.json();
-          setSampleFrameUrl(toAssetUrl(sitePayload?.sample_frame_url));
-          setSampleVideoSourceUrl(sitePayload?.sample_video_source_url ?? null);
+        if (siteRes.ok) {
+          const s = await siteRes.json();
+          setSampleFrameUrl(toAssetUrl(s?.sample_frame_url));
         }
-
-        if (!calibrationResponse.ok) {
-          return;
+        if (calRes.ok) {
+          const c = await calRes.json();
+          const tryParse = (raw: string | null) => {
+            if (!raw) return [];
+            try { return JSON.parse(raw) as number[][]; } catch { return []; }
+          };
+          setRoi(tryParse(c?.roi_polygon));
+          setCriticalLine(tryParse(c?.critical_line));
+          setReferenceLine(tryParse(c?.reference_line));
+          setNotes(c?.notes ?? '');
+          if (tryParse(c?.roi_polygon).length > 0) setMode('done');
         }
-        const calibrationPayload = await calibrationResponse.json();
-        const calibration = {
-          roi_polygon: parsePoints(calibrationPayload?.roi_polygon),
-          critical_line: parsePoints(calibrationPayload?.critical_line),
-          reference_line: parsePoints(calibrationPayload?.reference_line),
-          notes: calibrationPayload?.notes,
-        };
-        const roiBounds = getBoundingBox(calibration?.roi_polygon);
-        if (roiBounds) {
-          setFrameWidth(Math.max(roiBounds.width, 640));
-          setFrameHeight(Math.max(roiBounds.height, 480));
-          setRoiTop(roiBounds.top);
-          setRoiBottom(roiBounds.bottom);
-        }
-        if (Array.isArray(calibration?.critical_line) && calibration.critical_line.length >= 2) {
-          setCriticalY(calibration.critical_line[0][1]);
-        }
-        if (Array.isArray(calibration?.reference_line) && calibration.reference_line.length >= 2) {
-          setReferenceY(calibration.reference_line[0][1]);
-        }
-        setNotes(calibration?.notes ?? '');
-      } catch (loadError) {
-        console.error(loadError);
+      } catch (e) {
+        console.error(e);
       }
-    };
-
-    loadCalibration();
+    })();
   }, [id]);
 
-  const saveCalibration = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!id) {
-      return;
+  useEffect(() => {
+    draw();
+  });
+
+  const draw = () => {
+    const canvas = canvasRef.current;
+    const img = imgRef.current;
+    if (!canvas || !img || !img.complete) return;
+    canvas.width = img.clientWidth;
+    canvas.height = img.clientHeight;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const sx = canvas.width / naturalSize.w;
+    const sy = canvas.height / naturalSize.h;
+    if (roi.length > 0) {
+      ctx.beginPath();
+      roi.forEach(([x, y], i) => {
+        const px = x * sx, py = y * sy;
+        if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      });
+      if (mode !== 'roi' || roi.length >= 4) ctx.closePath();
+      ctx.fillStyle = 'rgba(59,130,246,0.2)';
+      ctx.fill();
+      ctx.strokeStyle = '#1d4ed8';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      roi.forEach(([x, y]) => {
+        ctx.beginPath();
+        ctx.arc(x * sx, y * sy, 4, 0, Math.PI * 2);
+        ctx.fillStyle = '#1d4ed8';
+        ctx.fill();
+      });
     }
-
-    setIsSaving(true);
-    setMessage(null);
-    setError(null);
-
-    const payload = {
-      roi_polygon: [
-        [0, roiTop],
-        [frameWidth, roiTop],
-        [frameWidth, roiBottom],
-        [0, roiBottom],
-      ],
-      critical_line: [
-        [0, criticalY],
-        [frameWidth, criticalY],
-      ],
-      reference_line: [
-        [0, referenceY],
-        [frameWidth, referenceY],
-      ],
-      notes,
+    const drawLine = (line: number[][], color: string) => {
+      if (line.length < 2) {
+        line.forEach(([x, y]) => {
+          const ctx2 = canvas.getContext('2d')!;
+          ctx2.beginPath();
+          ctx2.arc(x * sx, y * sy, 4, 0, Math.PI * 2);
+          ctx2.fillStyle = color;
+          ctx2.fill();
+        });
+        return;
+      }
+      ctx.beginPath();
+      ctx.moveTo(line[0][0] * sx, line[0][1] * sy);
+      ctx.lineTo(line[1][0] * sx, line[1][1] * sy);
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 3;
+      ctx.stroke();
     };
+    drawLine(criticalLine, '#dc2626');
+    drawLine(referenceLine, '#f59e0b');
+  };
 
+  const onImgLoad = () => {
+    const img = imgRef.current;
+    if (!img) return;
+    setNaturalSize({ w: img.naturalWidth || 640, h: img.naturalHeight || 480 });
+    draw();
+  };
+
+  const onCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const cx = e.clientX - rect.left;
+    const cy = e.clientY - rect.top;
+    const sx = naturalSize.w / canvas.width;
+    const sy = naturalSize.h / canvas.height;
+    const point: number[] = [Math.round(cx * sx), Math.round(cy * sy)];
+    if (mode === 'roi') {
+      setRoi([...roi, point]);
+    } else if (mode === 'critical' && criticalLine.length < 2) {
+      setCriticalLine([...criticalLine, point]);
+    } else if (mode === 'reference' && referenceLine.length < 2) {
+      setReferenceLine([...referenceLine, point]);
+    }
+  };
+
+  const reset = () => {
+    setRoi([]);
+    setCriticalLine([]);
+    setReferenceLine([]);
+    setMode('roi');
+  };
+
+  const next = () => {
+    if (mode === 'roi' && roi.length >= 4) setMode('critical');
+    else if (mode === 'critical' && criticalLine.length === 2) setMode('reference');
+    else if (mode === 'reference' && referenceLine.length === 2) setMode('done');
+  };
+
+  const save = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!id) return;
+    if (roi.length < 4) { setError('Dibujá un polígono de ROI de al menos 4 puntos.'); return; }
+    if (criticalLine.length !== 2) { setError('Marcá 2 puntos para la línea crítica.'); return; }
+    setIsSaving(true);
+    setError(null);
+    setMessage(null);
     try {
-      const response = await fetch(`${API_BASE}/sites/${id}/calibration`, {
+      const payload = {
+        roi_polygon: roi,
+        critical_line: criticalLine,
+        reference_line: referenceLine.length === 2 ? referenceLine : [],
+        notes,
+      };
+      const r = await fetch(`${API_BASE}/sites/${id}/calibration`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-      if (!response.ok) {
-        throw new Error(await response.text());
-      }
-      setMessage('Calibration saved.');
-      setTimeout(() => navigate(`/sites/${id}`), 800);
-    } catch (saveError) {
-      console.error(saveError);
-      setError('Failed to save calibration.');
+      if (!r.ok) throw new Error(await r.text());
+      setMessage('Calibración guardada.');
+      setTimeout(() => navigate(`/sites/${id}`), 700);
+    } catch (e) {
+      console.error(e);
+      setError('No se pudo guardar la calibración.');
     } finally {
       setIsSaving(false);
     }
   };
 
+  const instruction = () => {
+    if (mode === 'roi') return `Click para agregar puntos del polígono ROI (${roi.length} colocados, mínimo 4).`;
+    if (mode === 'critical') return `Click 2 puntos para la línea crítica (${criticalLine.length}/2).`;
+    if (mode === 'reference') return `Click 2 puntos para la línea de referencia (${referenceLine.length}/2) — opcional.`;
+    return 'Calibración lista. Guardá para aplicarla.';
+  };
+
   return (
     <div className="space-y-6 pb-20">
       <div>
-        <h2 className="text-2xl font-bold text-gray-900">Site Calibration</h2>
+        <h2 className="text-2xl font-bold text-gray-900">Calibración del sitio</h2>
         <p className="text-sm text-gray-500 mt-1">
-          Save a rectangular ROI and two threshold lines. This page is tied to the site reference frame so the numeric values map to a real fixed-camera view.
+          Hacé click sobre el frame de referencia para dibujar la ROI y las líneas. Los datos se guardan en el mismo endpoint que la versión numérica.
         </p>
       </div>
 
-      {sampleFrameUrl && (
+      {sampleFrameUrl ? (
         <section className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-          <img src={sampleFrameUrl} alt="Site reference frame for calibration" className="w-full object-cover" />
-          <div className="px-5 py-4 text-sm text-gray-600 flex items-center justify-between gap-4 flex-wrap">
-            <span>Use this stored frame as the pixel reference when adjusting ROI and threshold lines.</span>
-            {sampleVideoSourceUrl && (
-              <a href={sampleVideoSourceUrl} target="_blank" rel="noreferrer" className="font-medium text-blue-700 hover:text-blue-800">
-                Original source
-              </a>
-            )}
+          <div className="relative">
+            <img
+              ref={imgRef}
+              src={sampleFrameUrl}
+              alt="Reference frame"
+              onLoad={onImgLoad}
+              className="w-full object-cover select-none"
+              draggable={false}
+            />
+            <canvas
+              ref={canvasRef}
+              onClick={onCanvasClick}
+              className="absolute inset-0 w-full h-full cursor-crosshair"
+            />
+          </div>
+          <div className="px-5 py-3 border-t border-gray-200 text-sm text-gray-700 flex items-center justify-between flex-wrap gap-3">
+            <span>{instruction()}</span>
+            <div className="flex gap-2">
+              <button type="button" onClick={reset} className="inline-flex items-center gap-1 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm hover:border-gray-400">
+                <Undo2 className="w-4 h-4" /> Reset
+              </button>
+              <button type="button" onClick={next} disabled={mode === 'done'} className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+                {mode === 'roi' ? 'Siguiente: línea crítica' : mode === 'critical' ? 'Siguiente: referencia' : mode === 'reference' ? 'Listo' : 'Listo'}
+              </button>
+            </div>
           </div>
         </section>
+      ) : (
+        <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-4 text-sm text-yellow-800">
+          No hay frame de referencia cargado para este sitio. Subí uno desde el seed o ejecutá <code>scripts/fetch_demo_assets.py</code>.
+        </div>
       )}
 
-      <form onSubmit={saveCalibration} className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm space-y-5">
-        <div className="grid gap-4 md:grid-cols-2">
-          <label className="text-sm font-medium text-gray-700">
-            Frame width
-            <input
-              type="number"
-              value={frameWidth}
-              onChange={(event) => setFrameWidth(Number(event.target.value))}
-              className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"
-            />
-          </label>
-          <label className="text-sm font-medium text-gray-700">
-            Frame height
-            <input
-              type="number"
-              value={frameHeight}
-              onChange={(event) => setFrameHeight(Number(event.target.value))}
-              className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"
-            />
-          </label>
-          <label className="text-sm font-medium text-gray-700">
-            ROI top Y
-            <input
-              type="number"
-              value={roiTop}
-              onChange={(event) => setRoiTop(Number(event.target.value))}
-              className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"
-            />
-          </label>
-          <label className="text-sm font-medium text-gray-700">
-            ROI bottom Y
-            <input
-              type="number"
-              value={roiBottom}
-              onChange={(event) => setRoiBottom(Number(event.target.value))}
-              className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"
-            />
-          </label>
-          <label className="text-sm font-medium text-gray-700">
-            Critical line Y
-            <input
-              type="number"
-              value={criticalY}
-              onChange={(event) => setCriticalY(Number(event.target.value))}
-              className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"
-            />
-          </label>
-          <label className="text-sm font-medium text-gray-700">
-            Reference line Y
-            <input
-              type="number"
-              value={referenceY}
-              onChange={(event) => setReferenceY(Number(event.target.value))}
-              className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"
-            />
-          </label>
-        </div>
-
+      <form onSubmit={save} className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm space-y-4">
         <label className="block text-sm font-medium text-gray-700">
-          Notes
+          Notas
           <textarea
             value={notes}
-            onChange={(event) => setNotes(event.target.value)}
-            className="mt-1 min-h-[100px] w-full rounded-lg border border-gray-300 px-3 py-2"
-            placeholder="Describe the camera position, frame reference and any caveats for this site."
+            onChange={(e) => setNotes(e.target.value)}
+            className="mt-1 min-h-[80px] w-full rounded-lg border border-gray-300 px-3 py-2"
+            placeholder="Observaciones sobre la cámara, condiciones o marcas de referencia."
           />
         </label>
-
+        <div className="text-xs text-gray-500">
+          ROI: {roi.length} puntos · Crítica: {criticalLine.length}/2 · Referencia: {referenceLine.length}/2
+        </div>
         {message && <div className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">{message}</div>}
         {error && <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</div>}
-
         <button
           type="submit"
           disabled={isSaving}
           className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
         >
           {isSaving ? <LoaderCircle className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-          {isSaving ? 'Saving...' : 'Save calibration'}
+          {isSaving ? 'Guardando...' : 'Guardar calibración'}
         </button>
       </form>
     </div>
