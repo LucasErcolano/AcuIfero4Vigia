@@ -47,6 +47,11 @@ interface NodeAnalysisResponse {
     confidence: number;
     crossed_critical_line: boolean;
     evidence_frame_url?: string | null;
+    image_description?: string | null;
+    image_assessment_model?: string | null;
+    image_assessment_confidence?: number | null;
+    image_water_visible?: boolean | null;
+    image_infrastructure_at_risk?: boolean | null;
   };
   alert: {
     id?: number;
@@ -418,7 +423,22 @@ export default function SiteDetail() {
             </div>
             <div className="rounded-xl border border-gray-200 overflow-hidden bg-gray-50">
               {evidenceFrameUrl ? (
-                <img src={evidenceFrameUrl} alt="Evidence frame with calibration overlays" className="w-full object-cover" />
+                <div className="relative">
+                  <img src={evidenceFrameUrl} alt="Evidence frame with calibration overlays" className="w-full object-cover" />
+                  {analysisResult.observation.image_description && (
+                    <div className="absolute inset-x-0 bottom-0 bg-black/70 text-white text-xs px-3 py-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-semibold">
+                          Gemma ({analysisResult.observation.image_assessment_model ?? 'local'})
+                        </span>
+                        {typeof analysisResult.observation.image_assessment_confidence === 'number' && (
+                          <span>conf {formatPercent(analysisResult.observation.image_assessment_confidence)}</span>
+                        )}
+                      </div>
+                      <p className="mt-1 opacity-95">{analysisResult.observation.image_description}</p>
+                    </div>
+                  )}
+                </div>
               ) : (
                 <div className="h-full min-h-[240px] flex items-center justify-center text-sm text-gray-500 px-6 text-center">
                   The backend stored an analysis result, but no evidence frame URL was returned.
