@@ -51,6 +51,13 @@ def _render_inputs(
             f"crossed_critical_line={node_obs.get('crossed_critical_line', False)}, "
             f"confidence={node_obs.get('confidence', 0):.2f}."
         )
+        if node_obs.get("temporal_summary"):
+            parts.append(f"Resumen temporal nodo: {node_obs.get('temporal_summary')}.")
+        if node_obs.get("runner_name"):
+            parts.append(
+                f"Runner nodo: {node_obs.get('runner_name')} modo={node_obs.get('runner_mode', 'unknown')}, "
+                f"fallback={node_obs.get('fallback_used', False)}."
+            )
     else:
         parts.append("Nodo fijo: sin observaciones recientes.")
     if volunteer_parsed:

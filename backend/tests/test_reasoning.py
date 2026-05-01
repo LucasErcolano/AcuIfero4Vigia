@@ -4,9 +4,9 @@ import anyio
 import pytest
 from sqlmodel import Session
 
-from acuifero_vigia import main as main_module
+from acuifero_vigia.api.routers.alerts import get_alert
+from acuifero_vigia.api.routers.vigia import create_report
 from acuifero_vigia.db.database import edge_engine
-from acuifero_vigia.main import create_report, get_alert
 from acuifero_vigia.services.reasoning import (
     ReasoningBlock,
     deserialize_chain,

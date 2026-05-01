@@ -11,6 +11,13 @@ interface RuntimeStatus {
     model: string;
     detail: string;
   };
+  acuifero?: {
+    node_profile: string;
+    data_dir: string;
+    multimodal_enabled: boolean;
+    max_curated_frames: number;
+    artifact_retention_days: number;
+  };
   hydromet: {
     enabled: boolean;
     reachable: boolean;
@@ -44,7 +51,7 @@ export default function Settings() {
       <div>
         <h2 className="text-2xl font-bold text-gray-900">Runtime Status</h2>
         <p className="text-sm text-gray-500 mt-1">
-          Browser-first MVP with local LLM adapter plus live hydromet enrichment.
+          Fixed Acuifero node runtime plus live hydromet enrichment.
         </p>
       </div>
 
@@ -92,20 +99,34 @@ export default function Settings() {
       </section>
 
       <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm space-y-4">
-        <h3 className="font-semibold text-gray-900">Recommended local Gemma 4 setup</h3>
+        <h3 className="font-semibold text-gray-900">Acuifero fixed-node setup</h3>
         <p className="text-sm text-gray-600">
-          For a 12 GB VRAM box, start with `gemma4:e2b` and move to `gemma4:e4b` only if latency and VRAM stay acceptable.
-          The backend now defaults to Ollama's OpenAI-compatible endpoint on `127.0.0.1:11434/v1`.
+          The fixed Acuifero node targets Raspberry Pi 5 with 8 GB RAM, SSD-backed local data, and a compact text-first Gemma evidence pack.
+          Vigia is a separate volunteer/user node.
         </p>
+        {runtime?.acuifero && (
+          <div className="grid gap-3 text-sm text-gray-700 sm:grid-cols-2">
+            <div><span className="text-gray-500">Node profile:</span> {runtime.acuifero.node_profile}</div>
+            <div className="break-all"><span className="text-gray-500">Data dir:</span> {runtime.acuifero.data_dir}</div>
+            <div><span className="text-gray-500">Multimodal:</span> {runtime.acuifero.multimodal_enabled ? 'Enabled' : 'Disabled'}</div>
+            <div><span className="text-gray-500">Curated frames:</span> {runtime.acuifero.max_curated_frames}</div>
+            <div><span className="text-gray-500">Artifact retention:</span> {runtime.acuifero.artifact_retention_days} days</div>
+          </div>
+        )}
         <pre className="overflow-x-auto rounded-lg bg-gray-950 p-4 text-xs text-gray-100">
-{`ACUIFERO_LLM_ENABLED=true
+{`ACUIFERO_NODE_PROFILE=raspberry-pi-8gb
+ACUIFERO_DATA_DIR=/mnt/acuifero/data
+ACUIFERO_LLM_ENABLED=true
 ACUIFERO_LLM_BASE_URL=http://127.0.0.1:11434/v1
 ACUIFERO_LLM_MODEL=gemma4:e2b
-ACUIFERO_LLM_API_KEY=ollama`}
+ACUIFERO_LLM_API_KEY=ollama
+ACUIFERO_MULTIMODAL_ENABLED=false
+ACUIFERO_MAX_CURATED_FRAMES=3
+ACUIFERO_ARTIFACT_RETENTION_DAYS=7`}
         </pre>
         <p className="text-sm text-gray-600">
           Use `./scripts/run_gemma_local.sh` from the repo root to install Ollama locally, start the server and pull the selected Gemma 4 model.
-          If the local model is down, the backend falls back to rule-based parsing so field reports still work.
+          If the local model is down, Acuifero keeps producing a deterministic fixed-node assessment from the temporal evidence builder.
         </p>
       </section>
     </div>

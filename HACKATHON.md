@@ -1,51 +1,55 @@
-# Gemma 4 Good Hackathon — Submission
+# Gemma 4 Good Hackathon - Submission
 
 Track: **Global Resilience**. Prize target: **LiteRT Prize (USD 10,000)**.
 
 ## Judging criteria alignment
 
-### 1. Why not cloud GPT-4? — auditable reasoning on-device
+### 1. Why not cloud GPT-4? - Gemma decides locally on the node
+
+`Acuifero` is no longer "OpenCV plus explanation". The fixed node now builds a
+temporal evidence pack and asks Gemma to produce the node assessment package:
+`assessment_level`, `assessment_score`, `temporal_summary`,
+`reasoning_summary`, `reasoning_steps`, and `critical_evidence`.
+
+Proof: backend node-analysis endpoints and [`docs/architecture.md`](docs/architecture.md).
+
+### 2. Auditable reasoning instead of a black box
 
 Every non-green `FusedAlert` exposes a Gemma-produced Spanish reasoning block
-that cites specific signals (`waterline_ratio`, `crossed_critical_line`,
-`road_status`, etc.) plus a deterministic rule trace. Judges can inspect
+that cites specific signals plus a deterministic rule trace. Judges can inspect
 `GET /api/alerts/{id}` live.
 
 Proof: [`docs/hackathon/thinking-mode.md`](docs/hackathon/thinking-mode.md).
-Runnable: `scripts/demo_connectivity.py` → `curl /api/alerts/{id}`.
 
-### 2. Multimodal Gemma on evidence frames
+### 3. Multimodal temporal evidence, not just a single frame
 
-`backend/src/acuifero_vigia/adapters/image_assessment.py` feeds evidence
-frames to Gemma (E4B → E2B auto-fallback) with a 3-exemplar Spanish few-shot
-prompt. The Site Detail UI overlays Gemma's description on the frame.
+The demo node assessment now persists a rich audit pack with curated frames,
+evidence imagery, runner metadata, and fallback status. The evidence-frame
+description remains in the UI, but the architectural claim is temporal Gemma
+reasoning over a curated sequence.
 
 Proof: [`docs/hackathon/multimodal-comparison.md`](docs/hackathon/multimodal-comparison.md).
 
-### 3. Rioplatense linguistic specialization
+### 4. Rioplatense linguistic specialization
 
 82-example corpus across 6 provinces. `GemmaFewShotTextStructurer` with 12
-exemplars. Benchmark: rules 45% → few-shot ~80% on held-out test split.
+exemplars. Benchmark: rules 45% -> few-shot ~80% on held-out test split.
 
 Proof: [`docs/hackathon/rioplatense_eval.md`](docs/hackathon/rioplatense_eval.md).
 
-### 4. Connectivity-loss resilience (narrative spine)
+### 5. Connectivity-loss resilience
 
-`scripts/demo_connectivity.py` runs: online report → offline → queued report →
-local node analysis → **audible siren** → online → queue drains. Under 90
-seconds, reproducible.
+`scripts/demo_connectivity.py` runs: online report -> offline -> queued report
+-> local node analysis -> **audible siren** -> online -> queue drains.
 
-Web UI: red `SIN CONECTIVIDAD` banner during offline; green `Sincronizado`
-flash on drain.
-
-### 5. SINAGIR compatibility
+### 6. SINAGIR compatibility
 
 `POST /api/alerts/{id}/export-sinagir` returns a schema-tagged, documented
 payload. Field-by-field mapping published.
 
 Proof: [`docs/hackathon/sinagir-mapping.md`](docs/hackathon/sinagir-mapping.md).
 
-### 6. On-device Android path (LiteRT-adjacent)
+### 7. On-device Android path
 
 `android/.../data/GemmaOnDevice.kt` wraps MediaPipe LLM Inference for Gemma
 `.task` files. Volunteer report structuring runs fully on-device with no
@@ -53,46 +57,34 @@ silent backend fallback.
 
 Proof: [`docs/hackathon/android_gemma.md`](docs/hackathon/android_gemma.md).
 
-## Pitch video script (2.5 min)
+## Pitch video script
 
-0:00–0:15 — context: Argentina's Litoral flood problem; Bahía Blanca 2025
-alert-vs-risk gap ([Meteored article](https://www.meteored.com.ar/noticias/actualidad/no-es-lo-mismo-alerta-meteorologica-que-alerta-de-riesgo-local-la-diferencia-puede-ser-cuestion-de-vida-o-muerte.html)).
+0:00-0:15 - context: Argentina's Litoral flood problem; local-alert gap under connectivity loss.
 
-0:15–0:45 — Android volunteer flow: photo + voice → fully on-device Gemma
-structuring. Show "Analizado con Gemma en este dispositivo" chip.
+0:15-0:45 - Android volunteer flow: photo + voice -> fully on-device Gemma structuring.
 
-0:45–1:15 — fixed-node analysis on the Silverado clip. Evidence frame +
-Gemma Spanish description overlay. Show that CV drives the score and Gemma
-only narrates.
+0:45-1:20 - fixed-node analysis on the Silverado clip. Show the curated evidence sequence, `temporal_summary`, runner mode, and resulting alert.
 
-1:15–1:45 — connectivity-loss live: wifi off, red banner, offline report
-queued, node alert fires, **siren audible**, wifi on, queue drains.
+1:20-1:45 - evidence frame overlay plus Gemma's Spanish description as a supporting view, not as the main architectural claim.
 
-1:45–2:10 — thinking-mode reasoning chain expanding on an alert card.
+1:45-2:05 - connectivity-loss live: wifi off, red banner, offline report queued, node alert fires, **siren audible**, wifi on, queue drains.
 
-2:10–2:30 — SINAGIR mapping doc + Plan Nacional 2025-2029 alignment close.
+2:05-2:25 - alert card with the reasoning chain expanding on screen.
+
+2:25-2:40 - SINAGIR mapping and Plan Nacional 2025-2029 alignment close.
 
 ## Reproduce the demo
 
 ```bash
 ./scripts/setup.sh
 PYTHONPATH=backend/src python3 -m acuifero_vigia.scripts.seed
-./scripts/dev.sh            # starts Ollama + backend + frontend
+./scripts/dev.sh
 python3 scripts/demo_connectivity.py
 ```
 
 ## Test suite
 
 ```bash
-cd backend && PYTHONPATH=src pytest -q     # 27 tests
-cd frontend && npm test && npm run build   # vitest + vite build
+cd backend && PYTHONPATH=src pytest -q
+cd frontend && npm test && npm run build
 ```
-
-## Post-hackathon roadmap
-
-See GitHub issue "Post-hackathon roadmap":
-- Real LoRa ingestion (LoRaWAN gateway + payload decoder).
-- Real SINAGIR API handshake once a provincial integrator is assigned.
-- LoRA fine-tune on an expanded Litoral corpus (target 500+ examples).
-- Physical device fleet: Snapdragon 7-gen + 8-gen benchmarks.
-- Audio-first volunteer path (Gemma 3n-style ASR, batch 30 s clips).

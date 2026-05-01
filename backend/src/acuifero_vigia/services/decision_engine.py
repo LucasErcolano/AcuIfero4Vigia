@@ -102,7 +102,8 @@ def recompute_site_alert(
     summary_parts: list[str] = []
     if latest_node:
         summary_parts.append(
-            f"Node ratio {latest_node.waterline_ratio:.2f} ({'crossed' if latest_node.crossed_critical_line else 'below'} critical)"
+            latest_node.temporal_summary
+            or f"Node ratio {latest_node.waterline_ratio:.2f} ({'crossed' if latest_node.crossed_critical_line else 'below'} critical)"
         )
     if latest_parsed:
         summary_parts.append(latest_parsed.summary)
@@ -116,6 +117,10 @@ def recompute_site_alert(
         "rise_velocity": latest_node.rise_velocity,
         "crossed_critical_line": latest_node.crossed_critical_line,
         "confidence": latest_node.confidence,
+        "temporal_summary": latest_node.temporal_summary,
+        "runner_name": latest_node.runner_name,
+        "runner_mode": latest_node.runner_mode,
+        "fallback_used": latest_node.fallback_used,
     } if latest_node else None
     volunteer_snapshot = {
         "water_level_category": latest_parsed.water_level_category,

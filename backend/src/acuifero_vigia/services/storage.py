@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from uuid import uuid4
 
@@ -68,4 +69,11 @@ def persist_upload(file: UploadFile | None, prefix: str) -> str | None:
 def persist_frame_image(frame, prefix: str) -> str:
     target_path = get_upload_dir() / f'{prefix}-{uuid4().hex}.jpg'
     cv2.imwrite(str(target_path), frame)
+    return str(target_path)
+
+
+def persist_json_artifact(payload: object, prefix: str) -> str:
+    target_path = get_upload_dir() / f'{prefix}-{uuid4().hex}.json'
+    with target_path.open('w', encoding='utf-8') as handle:
+        json.dump(payload, handle, ensure_ascii=True, indent=2)
     return str(target_path)

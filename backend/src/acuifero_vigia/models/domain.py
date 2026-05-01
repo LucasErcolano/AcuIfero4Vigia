@@ -43,14 +43,26 @@ class NodeObservation(SQLModel, table=True):
     confidence: float
     decision_trace: str
     severity_score: float
+    assessment_score: float = 0.0
+    assessment_level: Optional[str] = None
     evidence_frame_path: Optional[str] = None
     analysis_mode: str = "temporal-gradient"
+    assessment_mode: str = "temporal-gemma-v1"
     sync_status: str = "pending"
     image_description: Optional[str] = None
     image_assessment_model: Optional[str] = None
     image_assessment_confidence: Optional[float] = None
     image_water_visible: Optional[bool] = None
     image_infrastructure_at_risk: Optional[bool] = None
+    temporal_summary: Optional[str] = None
+    reasoning_summary: Optional[str] = None
+    reasoning_steps: Optional[str] = None
+    critical_evidence: Optional[str] = None
+    runner_name: Optional[str] = None
+    runner_mode: Optional[str] = None
+    fallback_used: bool = False
+    artifact_refs: Optional[str] = None
+    assessment_artifact_id: Optional[int] = Field(default=None, index=True)
 
 
 class VolunteerReport(SQLModel, table=True):
@@ -115,6 +127,27 @@ class FusedAlert(SQLModel, table=True):
     reasoning_summary: Optional[str] = None
     reasoning_chain: Optional[str] = None
     reasoning_model: Optional[str] = None
+
+
+class AcuiferoAssessmentArtifact(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    site_id: str = Field(index=True)
+    source_type: str
+    video_path: Optional[str] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    assessment_mode: str = "temporal-gemma-v1"
+    frames_analyzed: int = 0
+    temporal_summary: str = ""
+    reasoning_summary: Optional[str] = None
+    reasoning_steps: str = "[]"
+    critical_evidence: str = "{}"
+    runner_name: Optional[str] = None
+    runner_mode: Optional[str] = None
+    fallback_used: bool = False
+    bundle_json: str = "{}"
+    verdict_json: str = "{}"
+    artifact_refs: str = "{}"
+    sync_status: str = "pending"
 
 
 class SyncQueueItem(SQLModel, table=True):

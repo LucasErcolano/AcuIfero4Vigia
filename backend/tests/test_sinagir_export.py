@@ -3,8 +3,9 @@ from __future__ import annotations
 import anyio
 from sqlmodel import Session
 
+from acuifero_vigia.api.routers.alerts import export_alert_sinagir
+from acuifero_vigia.api.routers.vigia import create_report
 from acuifero_vigia.db.database import edge_engine
-from acuifero_vigia.main import create_report, export_alert_sinagir
 
 
 REQUIRED_EVENT_KEYS = {

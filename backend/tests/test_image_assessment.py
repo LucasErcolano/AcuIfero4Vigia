@@ -9,6 +9,14 @@ from acuifero_vigia.adapters.image_assessment import (
     GemmaImageAssessmentAdapter,
     _parse_json_block,
 )
+from acuifero_vigia.core.settings import get_settings
+
+
+@pytest.fixture(autouse=True)
+def clear_settings_cache():
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
 
 
 def test_parse_json_block_extracts_dict():
@@ -29,6 +37,7 @@ def test_adapter_returns_none_for_missing_path(tmp_path: Path):
 
 
 def test_adapter_handles_http_error(monkeypatch, tmp_path: Path):
+    monkeypatch.setenv("ACUIFERO_MULTIMODAL_ENABLED", "true")
     img = tmp_path / "x.jpg"
     img.write_bytes(b"\x89PNG\r\n\x1a\nfakebytes")
 
@@ -41,6 +50,7 @@ def test_adapter_handles_http_error(monkeypatch, tmp_path: Path):
 
 
 def test_adapter_parses_success(monkeypatch, tmp_path: Path):
+    monkeypatch.setenv("ACUIFERO_MULTIMODAL_ENABLED", "true")
     img = tmp_path / "x.jpg"
     img.write_bytes(b"\x89PNG\r\n\x1a\nfakebytes")
 

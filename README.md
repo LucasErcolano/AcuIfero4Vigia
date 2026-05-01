@@ -1,47 +1,86 @@
 # Acuifero 4 + Vigia
 
-Hybrid flood early-warning system for Argentina's Litoral — fixed-camera CV
-nodes + offline-first volunteer reports + a local decision engine with
-auditable Gemma reasoning. Submitted to the Gemma 4 Good Hackathon (Global
-Resilience track, LiteRT Prize).
+Hybrid flood early-warning system for Argentina's Litoral: a Gemma-first
+fixed-node assessment engine (`Acuifero`) plus offline-first volunteer reports
+(`Vigia`) feeding a local, auditable alert pipeline. Submitted to the Gemma 4
+Good Hackathon (Global Resilience track, LiteRT Prize).
 
 ## What makes this different
 
-1. **Auditable thinking-mode chain** — every non-green `FusedAlert` carries a Spanish-language `reasoning_summary` + `chain_of_thought` from on-device Gemma, alongside the deterministic rule trace. See [`docs/hackathon/thinking-mode.md`](docs/hackathon/thinking-mode.md).
-2. **Multimodal evidence narration** — fixed-node evidence frames are described in Spanish by Gemma (E2B/E4B via Ollama). Explanatory only; CV remains the authoritative severity signal. See [`docs/hackathon/multimodal-comparison.md`](docs/hackathon/multimodal-comparison.md).
-3. **Rioplatense hydro understanding** — 82-example labeled corpus + 12-shot prompt beats rule-based baseline on Litoral colloquial phrases. See [`docs/hackathon/rioplatense_eval.md`](docs/hackathon/rioplatense_eval.md).
-4. **SINAGIR-ready export** — `POST /api/alerts/{id}/export-sinagir` emits a documented schema mapped to Argentina's national disaster registry. See [`docs/hackathon/sinagir-mapping.md`](docs/hackathon/sinagir-mapping.md).
-5. **On-device Android volunteer flow** — MediaPipe LLM Inference wrapper parses reports fully on-device (no silent backend fallback). See [`docs/hackathon/android_gemma.md`](docs/hackathon/android_gemma.md).
+1. **Gemma-first temporal node reasoning**: `Acuifero` curates a temporal evidence pack from fixed-camera video and asks Gemma to emit the node assessment package: `assessment_level`, `assessment_score`, `temporal_summary`, `reasoning_summary`, `reasoning_steps`, and audit artifacts.
+2. **Auditable reasoning chain**: every non-green `FusedAlert` carries a Spanish-language reasoning block alongside the deterministic rule trace. See [`docs/hackathon/thinking-mode.md`](docs/hackathon/thinking-mode.md).
+3. **Rich audit pack for demos and review**: each node analysis persists curated frames, evidence imagery, runner metadata, fallback status, and JSON artifacts instead of only a heuristic score.
+4. **Rioplatense hydro understanding**: 82-example labeled corpus + 12-shot prompt beats rule-based baseline on Litoral colloquial phrases. See [`docs/hackathon/rioplatense_eval.md`](docs/hackathon/rioplatense_eval.md).
+5. **SINAGIR-ready export**: `POST /api/alerts/{id}/export-sinagir` emits a documented schema mapped to Argentina's national disaster registry. See [`docs/hackathon/sinagir-mapping.md`](docs/hackathon/sinagir-mapping.md).
+6. **On-device Android volunteer flow**: MediaPipe LLM Inference wrapper parses reports fully on-device (no silent backend fallback). See [`docs/hackathon/android_gemma.md`](docs/hackathon/android_gemma.md).
 
-Connectivity-loss demo: [`scripts/demo_connectivity.py`](scripts/demo_connectivity.py) runs the full `wifi-off → local alert → siren → wifi-on → queue drain` narrative in under 90 s.
+Connectivity-loss demo: [`scripts/demo_connectivity.py`](scripts/demo_connectivity.py) runs the full `wifi-off -> local alert -> siren -> wifi-on -> queue drain` narrative in under 90 s.
 
-## Known limitations
+## Overview
 
-- Android on-device Gemma was not validated on a physical device (no SDK on dev machine); code + build doc ships, developer runs the APK.
-- LoRA fine-tune track from the corpus was not attempted (8 GB dev RAM, no CUDA). Production runtime uses the few-shot prompt path, which does not depend on LoRA.
-- Real SINAGIR API integration, real LoRa hardware, real GPIO relays are out of scope. Simulators stand in.
-- `gemma4:e4b` may be too tight on some 12 GB systems; adapter auto-falls back to `gemma4:e2b`.
+The system has three real signal paths:
 
----
-
-## Overview (original MVP surface)
-
-Browser-first flood early-warning MVP with three real signal paths:
-
-- fixed-node video analysis using OpenCV over real clips
-- volunteer field reports stored offline-first in the PWA
+- `Acuifero`: Gemma-first fixed-node temporal assessment over real clips
+- `Vigia`: volunteer field reports stored offline-first in the PWA
 - live hydrometeorological enrichment from Open-Meteo APIs
 
-The backend is wired for a local Gemma runtime through an OpenAI-compatible endpoint. By default it now targets a local Ollama server.
+The fixed `Acuifero` node is now sized for a Raspberry Pi 8 GB edge box with
+local storage. It uses OpenCV locally to curate compact temporal evidence, then
+asks a local OpenAI-compatible Gemma runtime for a text verdict over those
+numeric/temporal hints. `Vigia` remains a separate volunteer/user node.
 
-## What is real in this MVP
+## What is real in this repo
 
-- Node analysis samples fixed-camera video and scores the highest-risk window instead of mocking detections.
+- Node analysis samples fixed-camera video, curates a temporal evidence bundle, and asks Gemma to emit the node assessment package.
+- OpenCV still runs locally, but only for frame curation, ROI/band processing, overlays, and numeric hints passed into Gemma.
+- Every node analysis persists an audit artifact pack with curated frames, evidence frame, temporal summary, runner metadata, fallback status, and JSON manifests.
 - Volunteer reports are parsed into structured observations with a local Gemma adapter and a deterministic fallback.
 - Fused alerts are recomputed from node, volunteer, and hydromet signals.
 - Hydromet context is fetched from real public APIs using site coordinates.
 - Edge-to-central sync still uses local SQLite databases, but the queue and replication flow are real.
 - The repo includes a real fixed-camera demo site based on the public-domain USGS Silverado clip.
+
+## Acuifero fixed node target
+
+The current production target for the fixed-camera `Acuifero` node is:
+
+- Raspberry Pi 5, 8 GB RAM
+- Raspberry Pi OS 64-bit
+- 128 GB or larger USB SSD/NVMe for `backend/data`
+- fixed camera input uploaded to the backend or bound as per-site sample media
+- local SQLite for `edge.db`, audit artifacts, and the sync queue
+
+The Raspberry profile is the default:
+
+```bash
+ACUIFERO_NODE_PROFILE=raspberry-pi-8gb
+ACUIFERO_DATA_DIR=/mnt/acuifero/data
+ACUIFERO_MAX_CURATED_FRAMES=3
+ACUIFERO_ARTIFACT_RETENTION_DAYS=7
+ACUIFERO_MULTIMODAL_ENABLED=false
+```
+
+On this profile, Acuifero still curates frames locally, but the Gemma call is
+text-first over the temporal evidence pack. Inline multimodal frame prompting is
+disabled by default to keep RAM and latency inside a Raspberry Pi 8 GB budget.
+Set `ACUIFERO_MULTIMODAL_ENABLED=true` only for a stronger node.
+
+`Vigia` is intentionally out of this hardware profile: volunteer reports and
+phone/user-side operation are treated as a separate node/application.
+
+## Team module boundaries
+
+The backend API is split by ownership so Acuifero and Vigia can move in parallel:
+
+- Acuifero fixed-node work: `api/routers/acuifero.py`,
+  `services/acuifero_assessment.py`, `adapters/video_assessment.py`
+- Vigia volunteer/user work: `api/routers/vigia.py`,
+  `services/report_structuring.py`, text adapters, Android/PWA report queues
+- Shared integration: `api/routers/alerts.py`, `services/decision_engine.py`,
+  `models/domain.py`, runtime settings, and sync
+
+Use `develop` as the shared baseline for these boundaries, then branch from it
+for feature work.
 
 ## Local Gemma runtime
 
@@ -54,11 +93,15 @@ ACUIFERO_LLM_MODEL=gemma4:e2b
 ACUIFERO_LLM_API_KEY=ollama
 ```
 
-Practical recommendation for a 12 GB VRAM RTX 3060:
+Practical recommendation for the Raspberry Pi 8 GB Acuifero node:
 
 - start with `gemma4:e2b`
-- move to `gemma4:e4b` only if VRAM headroom and latency stay acceptable
-- keep video analysis in OpenCV; use Gemma for text structuring and operator-facing reasoning
+- keep `ACUIFERO_MULTIMODAL_ENABLED=false`
+- keep `ACUIFERO_MAX_CURATED_FRAMES=3`
+- store `ACUIFERO_DATA_DIR` on SSD/NVMe, not on the boot microSD
+
+On bigger x86/GPU nodes, you can raise curated frames and enable multimodal
+prompting, but that is not the default Acuifero deployment target.
 
 Install and start the local runtime from the repo root:
 
@@ -67,15 +110,11 @@ Install and start the local runtime from the repo root:
 ./scripts/run_gemma_local.sh
 ```
 
-That installs Ollama under `tools/ollama`, starts the local API, and pulls `gemma4:e2b` by default.
-
 For local Linux development with one command, use:
 
 ```bash
 ./scripts/dev.sh
 ```
-
-That script starts or reuses Ollama, seeds the backend, launches backend and frontend, writes logs under `backend/data/logs`, and stops both app servers on `Ctrl+C`.
 
 ## Demo assets
 
@@ -100,8 +139,6 @@ Bootstrap completo desde Linux:
 ./scripts/setup.sh
 ```
 
-Ese script instala dependencias, baja el clip demo, aplica el seed idempotente y deja el frontend listo.
-
 ### Backend
 
 Requirements:
@@ -117,12 +154,6 @@ uv venv
 . .venv/bin/activate
 uv pip install -e .[dev]
 python -m acuifero_vigia.scripts.seed
-```
-
-Optional env bootstrap:
-
-```bash
-cp backend/.env.example backend/.env
 ```
 
 Run backend:
@@ -142,9 +173,9 @@ npm run dev -- --host 127.0.0.1 --port 5173
 
 ### Android
 
-There is now an Android app module under `android/` on the `develop` branch.
+There is now an Android app module under `android/`.
 
-Current Android MVP scope:
+Current Android scope:
 
 - Compose app with dashboard, alerts, sites and detail screens
 - sample-node analysis against the real backend
@@ -153,8 +184,6 @@ Current Android MVP scope:
 - numeric calibration form
 - configurable backend base URL for emulator or physical device
 
-Open `android/` in Android Studio. For emulator use the default backend URL `http://10.0.2.2:8000/api/`. For a physical device, change it from the in-app Settings screen to your machine LAN IP.
-
 ## Demo flow
 
 1. Start backend and frontend.
@@ -162,7 +191,7 @@ Open `android/` in Android Studio. For emulator use the default backend URL `htt
 3. Open `http://localhost:5173`.
 4. Open the `Silverado Fixed Cam (USGS)` site.
 5. Run `Analyze bundled sample` to execute the real fixed-camera clip through the backend.
-6. Inspect the returned evidence frame and alert level.
+6. Inspect the returned evidence frame, `temporal_summary`, runner info, and alert level.
 7. Refresh the hydromet snapshot.
 8. Adjust calibration on the calibration page if needed.
 9. Submit a volunteer report from the `Report` page.
@@ -195,18 +224,12 @@ cd frontend
 npm run dev -- --host 127.0.0.1 --port 5173
 ```
 
-Or start everything at once:
-
-```bash
-./scripts/dev.sh
-```
-
 Then validate the live stack from a third terminal:
 
 ```bash
 curl -sf http://127.0.0.1:8000/api/settings/runtime | jq
 curl -sf http://127.0.0.1:8000/api/sites | jq '.[] | {id,name}'
-curl -sf -X POST http://127.0.0.1:8000/api/sites/silverado-fixed-cam-usgs/sample-node-analysis | jq '{site_id: .observation.site_id, frames_analyzed: .observation.frames_analyzed, waterline_ratio: .observation.waterline_ratio, alert_level: .alert.level}'
+curl -sf -X POST http://127.0.0.1:8000/api/sites/silverado-fixed-cam-usgs/sample-node-analysis | jq '{site_id: .observation.site_id, frames_analyzed: .observation.frames_analyzed, assessment_mode: .observation.assessment_mode, runner: .observation.runner.mode, alert_level: .alert.level}'
 curl -sf -X POST http://127.0.0.1:8000/api/reports \
   -F site_id=silverado-fixed-cam-usgs \
   -F reporter_name='Operador Demo' \
@@ -217,16 +240,9 @@ curl -sf -X POST http://127.0.0.1:8000/api/reports \
 
 Expected on a healthy setup:
 
-- `/api/settings/runtime` returns `llm.reachable=true` and `model=gemma4:e2b`
-- sample-node analysis returns `frames_analyzed=126` and `alert_level=red` for the bundled USGS clip
+- `/api/settings/runtime` returns `llm.reachable=true`, `model=gemma4:e2b`, and `acuifero.node_profile=raspberry-pi-8gb`
+- sample-node analysis returns `frames_analyzed=126`, `assessment_mode=temporal-gemma-v1`, and `alert_level=red` for the bundled USGS clip
 - report submission returns `200 OK` and creates a fused red alert for the sample site
-
-Notes:
-
-- Run the seed before the smoke test, otherwise `silverado-fixed-cam-usgs` will not exist.
-- The first local LLM request can be noticeably slower while Ollama warms the model.
-- With local Ollama, the backend first uses the native `/api/chat` JSON mode for Gemma and then falls back to the OpenAI-compatible endpoint.
-- `parser_source` should normally be `llm` on a healthy local Gemma setup, and falls back to `rules` only if the model times out or returns unusable output.
 
 ## Main API routes
 
@@ -252,7 +268,7 @@ Backend coverage includes:
 - health and connectivity endpoints
 - volunteer report structuring + sync
 - persisted report attachments
-- fixed-node analysis on a synthetic upload clip
+- Gemma-first fixed-node temporal assessment on a synthetic upload clip
 - bundled sample-node analysis endpoint
 
 Run checks with:
@@ -267,6 +283,7 @@ cd frontend && npm run lint
 ## Current limitations
 
 - Calibration is numeric and rectangular in the UI, not click-to-draw.
-- The fixed-node analyzer is heuristic and tuned for fixed cameras with stable framing.
+- The temporal evidence builder is still tuned for fixed cameras with stable framing; moving cameras are out of scope.
+- The default LiteRT runner is a stub target; the implemented fixed-node runtime today is the Ollama runner with deterministic fallback.
 - Hydromet data is real but model-based; it is not a replacement for a local gauging station.
-- `gemma4:e4b` may be too tight on some 12 GB systems depending on concurrent GPU load.
+- Raspberry Pi 8 GB is a text-first Acuifero node target. Multimodal Gemma over inline images should be treated as an optional stronger-node mode.

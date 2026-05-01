@@ -12,11 +12,14 @@ import pytest
 from fastapi import UploadFile
 from sqlmodel import Session, SQLModel, select
 
-from acuifero_vigia import main as main_module
+from acuifero_vigia.api import deps
+from acuifero_vigia.api.routers.acuifero import analyze_node
+from acuifero_vigia.api.routers.sync import flush_sync
+from acuifero_vigia.api.routers.vigia import create_report
 from acuifero_vigia.core import settings as settings_module
 from acuifero_vigia.db.database import central_engine, edge_engine, init_db
-from acuifero_vigia.main import analyze_node, app, create_report, flush_sync
-from acuifero_vigia.models.domain import FusedAlert, NodeObservation, Site, SiteCalibration, SyncQueueItem, VolunteerReport
+from acuifero_vigia.main import app
+from acuifero_vigia.models.domain import AcuiferoAssessmentArtifact, FusedAlert, NodeObservation, Site, SiteCalibration, SyncQueueItem, VolunteerReport
 from acuifero_vigia.models.domain import HydrometSnapshot
 from acuifero_vigia.services.storage import get_upload_dir
 
@@ -41,8 +44,8 @@ def request(method: str, url: str, **kwargs) -> httpx.Response:
 def reset_state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("ACUIFERO_UPLOAD_DIR", str(tmp_path / "uploads"))
     settings_module.get_settings.cache_clear()
-    main_module.is_online = True
-    monkeypatch.setattr(main_module.llm_client, "structure_observation", lambda *_args, **_kwargs: None)
+    deps.is_online = True
+    monkeypatch.setattr(deps.llm_client, "structure_observation", lambda *_args, **_kwargs: None)
 
     for engine in (edge_engine, central_engine):
         with Session(engine) as session:
@@ -198,6 +201,16 @@ def test_node_analysis_with_video(tmp_path: Path):
     assert payload["observation"]["frames_analyzed"] >= 3
     assert payload["observation"]["confidence"] > 0
     assert payload["observation"]["evidence_frame_url"].startswith("/uploads/")
+    assert payload["observation"]["assessment_mode"] == "temporal-gemma-v1"
+    assert payload["observation"]["artifact_id"] is not None
+    assert payload["observation"]["runner"]["mode"] in {
+        "ollama-multimodal-temporal",
+        "text-only-temporal",
+        "deterministic-fallback",
+    }
+    assert payload["observation"]["temporal_summary"]
+    assert isinstance(payload["observation"]["reasoning_steps"], list)
+    assert isinstance(payload["observation"]["artifact_refs"], dict)
     assert payload["alert"].level in {"yellow", "orange", "red"}
 
     with Session(edge_engine) as session:
@@ -205,6 +218,12 @@ def test_node_analysis_with_video(tmp_path: Path):
         assert observation is not None
         assert observation.video_path is not None
         assert observation.sync_status == "pending"
+        assert observation.assessment_artifact_id is not None
+        artifact = session.get(AcuiferoAssessmentArtifact, observation.assessment_artifact_id)
+        assert artifact is not None
+        assert artifact.frames_analyzed >= 3
+        assert artifact.bundle_json
+        assert artifact.verdict_json
 
 
 def test_sample_node_analysis_endpoint(tmp_path: Path):
@@ -242,6 +261,8 @@ def test_sample_node_analysis_endpoint(tmp_path: Path):
     payload = response.json()
     assert payload["observation"]["frames_analyzed"] >= 3
     assert payload["observation"]["evidence_frame_url"].startswith("/uploads/")
+    assert payload["observation"]["artifact_id"] is not None
+    assert payload["observation"]["assessment_mode"] == "temporal-gemma-v1"
     assert payload["sample_video_source_url"] == "https://example.com/fixed-cam"
 
 
@@ -257,7 +278,7 @@ def test_external_snapshot_refresh_serializes_response(monkeypatch: pytest.Monke
         river_discharge_trend=1.5,
     )
 
-    monkeypatch.setattr(main_module.external_data_service, "fetch_snapshot", lambda _site: snapshot)
+    monkeypatch.setattr(deps.external_data_service, "fetch_snapshot", lambda _site: snapshot)
 
     response = request("POST", "/api/sites/test-site/external-snapshot/refresh")
     assert response.status_code == 200
