@@ -131,6 +131,20 @@ Bundled sample site:
 - local clip: `fixtures/media/usgs_silverado_fire_2015_fixed_cam.mp4`
 - reference frame: `fixtures/frames/silverado_060s.jpg`
 
+## Raspberry Pi fixed-node probe
+
+For the real Raspberry Pi 8 GB node, use the operator probe script:
+
+```bash
+python3 scripts/pi_acuifero_node.py --site-id puente-arroyo-01 --synthetic
+python3 scripts/pi_acuifero_node.py --site-id puente-arroyo-01 --camera /dev/video0 --duration 12
+```
+
+It checks backend/Gemma health, captures or generates a short fixed-camera clip,
+uploads it to `POST /api/node/analyze`, and prints the assessment/alert summary.
+See [`docs/raspberry-pi-acuifero-node.md`](docs/raspberry-pi-acuifero-node.md)
+for the Pi environment, Ollama startup, sample data, and camera capture flow.
+
 ## Local setup
 
 Bootstrap completo desde Linux:
