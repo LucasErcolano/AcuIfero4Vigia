@@ -29,6 +29,16 @@ class Settings:
     llm_api_key: str
     llm_timeout_seconds: float
     acuifero_multimodal_enabled: bool
+    acuifero_multimodal_verifier_enabled: bool
+    acuifero_multimodal_base_url: str
+    acuifero_multimodal_model: str
+    acuifero_multimodal_min_interval_seconds: int
+    acuifero_multimodal_score_threshold: float
+    acuifero_multimodal_confidence_threshold: float
+    acuifero_multimodal_image_max_side: int
+    acuifero_multimodal_num_ctx: int
+    acuifero_multimodal_num_predict: int
+    acuifero_multimodal_timeout_seconds: float
     hydromet_enabled: bool
     hydromet_timeout_seconds: float
     acuifero_max_curated_frames: int
@@ -40,9 +50,10 @@ def get_settings() -> Settings:
     backend_root = Path(__file__).resolve().parents[3]
     project_root = backend_root.parent
     data_dir = Path(os.environ.get("ACUIFERO_DATA_DIR", str(backend_root / "data")))
-    acuifero_node_profile = os.environ.get("ACUIFERO_NODE_PROFILE", "raspberry-pi-8gb")
+    acuifero_node_profile = os.environ.get("ACUIFERO_NODE_PROFILE", "raspberry-pi-8gb-hybrid")
     is_raspberry_profile = acuifero_node_profile.strip().lower() in {
         "raspberry-pi-8gb",
+        "raspberry-pi-8gb-hybrid",
         "raspberry-pi",
         "rpi8gb",
         "rpi",
@@ -66,6 +77,35 @@ def get_settings() -> Settings:
         llm_api_key=os.environ.get("ACUIFERO_LLM_API_KEY", "ollama"),
         llm_timeout_seconds=float(os.environ.get("ACUIFERO_LLM_TIMEOUT_SECONDS", "30")),
         acuifero_multimodal_enabled=_as_bool("ACUIFERO_MULTIMODAL_ENABLED", not is_raspberry_profile),
+        acuifero_multimodal_verifier_enabled=_as_bool(
+            "ACUIFERO_MULTIMODAL_VERIFIER_ENABLED",
+            is_raspberry_profile,
+        ),
+        acuifero_multimodal_base_url=os.environ.get(
+            "ACUIFERO_MULTIMODAL_BASE_URL",
+            os.environ.get("ACUIFERO_LLM_BASE_URL", "http://127.0.0.1:11434/v1"),
+        ),
+        acuifero_multimodal_model=os.environ.get(
+            "ACUIFERO_MULTIMODAL_MODEL",
+            os.environ.get("ACUIFERO_LLM_MODEL", "gemma4:e2b"),
+        ),
+        acuifero_multimodal_min_interval_seconds=int(
+            os.environ.get("ACUIFERO_MULTIMODAL_MIN_INTERVAL_SECONDS", "300")
+        ),
+        acuifero_multimodal_score_threshold=float(
+            os.environ.get("ACUIFERO_MULTIMODAL_SCORE_THRESHOLD", "0.55")
+        ),
+        acuifero_multimodal_confidence_threshold=float(
+            os.environ.get("ACUIFERO_MULTIMODAL_CONFIDENCE_THRESHOLD", "0.62")
+        ),
+        acuifero_multimodal_image_max_side=int(
+            os.environ.get("ACUIFERO_MULTIMODAL_IMAGE_MAX_SIDE", "768" if is_raspberry_profile else "1024")
+        ),
+        acuifero_multimodal_num_ctx=int(os.environ.get("ACUIFERO_MULTIMODAL_NUM_CTX", "2048")),
+        acuifero_multimodal_num_predict=int(os.environ.get("ACUIFERO_MULTIMODAL_NUM_PREDICT", "256")),
+        acuifero_multimodal_timeout_seconds=float(
+            os.environ.get("ACUIFERO_MULTIMODAL_TIMEOUT_SECONDS", "180" if is_raspberry_profile else "60")
+        ),
         hydromet_enabled=_as_bool("ACUIFERO_HYDROMET_ENABLED", True),
         hydromet_timeout_seconds=float(os.environ.get("ACUIFERO_HYDROMET_TIMEOUT_SECONDS", "12")),
         acuifero_max_curated_frames=int(

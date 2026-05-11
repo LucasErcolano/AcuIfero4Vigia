@@ -15,6 +15,15 @@ interface RuntimeStatus {
     node_profile: string;
     data_dir: string;
     multimodal_enabled: boolean;
+    multimodal_verifier_enabled: boolean;
+    multimodal_base_url: string;
+    multimodal_model: string;
+    multimodal_min_interval_seconds: number;
+    multimodal_score_threshold: number;
+    multimodal_confidence_threshold: number;
+    multimodal_image_max_side: number;
+    multimodal_num_ctx: number;
+    multimodal_timeout_seconds: number;
     max_curated_frames: number;
     artifact_retention_days: number;
   };
@@ -101,31 +110,47 @@ export default function Settings() {
       <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm space-y-4">
         <h3 className="font-semibold text-gray-900">Acuifero fixed-node setup</h3>
         <p className="text-sm text-gray-600">
-          The fixed Acuifero node targets Raspberry Pi 5 with 8 GB RAM, SSD-backed local data, and a compact text-first Gemma evidence pack.
+          The fixed Acuifero node targets Raspberry Pi 5 with 8 GB RAM, SSD-backed local data, a compact text-first Gemma guard,
+          and an occasional Gemma 4 multimodal verifier over one curated frame.
           Vigia is a separate volunteer/user node.
         </p>
         {runtime?.acuifero && (
           <div className="grid gap-3 text-sm text-gray-700 sm:grid-cols-2">
             <div><span className="text-gray-500">Node profile:</span> {runtime.acuifero.node_profile}</div>
             <div className="break-all"><span className="text-gray-500">Data dir:</span> {runtime.acuifero.data_dir}</div>
-            <div><span className="text-gray-500">Multimodal:</span> {runtime.acuifero.multimodal_enabled ? 'Enabled' : 'Disabled'}</div>
+            <div><span className="text-gray-500">Primary multimodal:</span> {runtime.acuifero.multimodal_enabled ? 'Enabled' : 'Disabled'}</div>
+            <div><span className="text-gray-500">Verifier:</span> {runtime.acuifero.multimodal_verifier_enabled ? 'Enabled' : 'Disabled'}</div>
+            <div className="break-all"><span className="text-gray-500">Verifier URL:</span> {runtime.acuifero.multimodal_base_url}</div>
+            <div><span className="text-gray-500">Verifier model:</span> {runtime.acuifero.multimodal_model}</div>
+            <div><span className="text-gray-500">Verifier cadence:</span> {runtime.acuifero.multimodal_min_interval_seconds}s</div>
+            <div><span className="text-gray-500">Verifier score trigger:</span> {runtime.acuifero.multimodal_score_threshold.toFixed(2)}</div>
+            <div><span className="text-gray-500">Verifier confidence trigger:</span> {runtime.acuifero.multimodal_confidence_threshold.toFixed(2)}</div>
+            <div><span className="text-gray-500">Verifier image max side:</span> {runtime.acuifero.multimodal_image_max_side}px</div>
+            <div><span className="text-gray-500">Verifier context:</span> {runtime.acuifero.multimodal_num_ctx} tokens</div>
             <div><span className="text-gray-500">Curated frames:</span> {runtime.acuifero.max_curated_frames}</div>
             <div><span className="text-gray-500">Artifact retention:</span> {runtime.acuifero.artifact_retention_days} days</div>
           </div>
         )}
         <pre className="overflow-x-auto rounded-lg bg-gray-950 p-4 text-xs text-gray-100">
-{`ACUIFERO_NODE_PROFILE=raspberry-pi-8gb
+{`ACUIFERO_NODE_PROFILE=raspberry-pi-8gb-hybrid
 ACUIFERO_DATA_DIR=/mnt/acuifero/data
 ACUIFERO_LLM_ENABLED=true
 ACUIFERO_LLM_BASE_URL=http://127.0.0.1:11434/v1
 ACUIFERO_LLM_MODEL=gemma4:e2b
 ACUIFERO_LLM_API_KEY=ollama
 ACUIFERO_MULTIMODAL_ENABLED=false
+ACUIFERO_MULTIMODAL_VERIFIER_ENABLED=true
+ACUIFERO_MULTIMODAL_BASE_URL=http://127.0.0.1:11434/v1
+ACUIFERO_MULTIMODAL_MODEL=gemma4:e2b
+ACUIFERO_MULTIMODAL_MIN_INTERVAL_SECONDS=300
+ACUIFERO_MULTIMODAL_IMAGE_MAX_SIDE=768
+ACUIFERO_MULTIMODAL_NUM_CTX=2048
+ACUIFERO_MULTIMODAL_TIMEOUT_SECONDS=180
 ACUIFERO_MAX_CURATED_FRAMES=3
 ACUIFERO_ARTIFACT_RETENTION_DAYS=7`}
         </pre>
         <p className="text-sm text-gray-600">
-          Use `./scripts/run_gemma_local.sh` from the repo root to install Ollama locally, start the server and pull the selected Gemma 4 model.
+          Use `./scripts/run_acuifero_pi8_hybrid.sh` from the repo root to start Ollama, pull the selected Gemma 4 model, seed the edge DB, and run the API.
           If the local model is down, Acuifero keeps producing a deterministic fixed-node assessment from the temporal evidence builder.
         </p>
       </section>

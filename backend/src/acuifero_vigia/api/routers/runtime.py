@@ -39,6 +39,15 @@ async def get_runtime_status() -> RuntimeStatus:
             "node_profile": settings.acuifero_node_profile,
             "data_dir": str(settings.data_dir),
             "multimodal_enabled": settings.acuifero_multimodal_enabled,
+            "multimodal_verifier_enabled": settings.acuifero_multimodal_verifier_enabled,
+            "multimodal_base_url": settings.acuifero_multimodal_base_url,
+            "multimodal_model": settings.acuifero_multimodal_model,
+            "multimodal_min_interval_seconds": settings.acuifero_multimodal_min_interval_seconds,
+            "multimodal_score_threshold": settings.acuifero_multimodal_score_threshold,
+            "multimodal_confidence_threshold": settings.acuifero_multimodal_confidence_threshold,
+            "multimodal_image_max_side": settings.acuifero_multimodal_image_max_side,
+            "multimodal_num_ctx": settings.acuifero_multimodal_num_ctx,
+            "multimodal_timeout_seconds": settings.acuifero_multimodal_timeout_seconds,
             "max_curated_frames": settings.acuifero_max_curated_frames,
             "artifact_retention_days": settings.acuifero_artifact_retention_days,
         },
@@ -59,4 +68,3 @@ async def get_connectivity() -> ConnectivityStatus:
 async def set_connectivity(payload: ConnectivityStatus) -> ConnectivityStatus:
     deps.is_online = payload.is_online
     return ConnectivityStatus(is_online=deps.is_online)
-

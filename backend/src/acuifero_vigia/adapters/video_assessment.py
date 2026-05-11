@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import base64
 import json
 from pathlib import Path
 from typing import Any
 
 import httpx
 
+from acuifero_vigia.adapters.image_assessment import _encode_image
 from acuifero_vigia.adapters.llm import OpenAICompatibleLLM
 from acuifero_vigia.core.settings import get_settings
 from acuifero_vigia.services.acuifero_assessment import AssessmentVerdict, TemporalEvidencePack
@@ -101,22 +101,18 @@ class OllamaGemmaRunner:
         return self._assess_text(pack)
 
     def _assess_multimodal(self, pack: TemporalEvidencePack) -> AssessmentVerdict | None:
-        if not self.llm._looks_like_ollama():
-            return None
-
         encoded_images = []
         for frame in pack.selected_frames:
             path = Path(frame.frame_path)
             if not path.exists():
                 continue
-            with path.open("rb") as handle:
-                encoded_images.append(base64.b64encode(handle.read()).decode("ascii"))
+            encoded_images.append(_encode_image(path, max_side=self.settings.acuifero_multimodal_image_max_side))
 
         if not encoded_images:
             return None
 
         payload = {
-            "model": self.settings.llm_model,
+            "model": self.settings.acuifero_multimodal_model,
             "stream": False,
             "format": "json",
             "messages": [
@@ -127,11 +123,15 @@ class OllamaGemmaRunner:
                     "images": encoded_images,
                 },
             ],
-            "options": {"temperature": 0.1, "num_predict": 512},
+            "options": {
+                "temperature": 0.1,
+                "num_ctx": self.settings.acuifero_multimodal_num_ctx,
+                "num_predict": min(512, self.settings.acuifero_multimodal_num_predict),
+            },
         }
         try:
-            with httpx.Client(timeout=self.settings.llm_timeout_seconds) as client:
-                response = client.post(self.llm._ollama_chat_url(), json=payload)
+            with httpx.Client(timeout=self.settings.acuifero_multimodal_timeout_seconds) as client:
+                response = client.post(self._multimodal_ollama_chat_url(), json=payload)
                 response.raise_for_status()
             body = response.json()
             content = body.get("message", {}).get("content", "")
@@ -143,9 +143,12 @@ class OllamaGemmaRunner:
             return None
         return _normalize_verdict_payload(
             parsed,
-            runner_name=self.settings.llm_model,
+            runner_name=self.settings.acuifero_multimodal_model,
             runner_mode="ollama-multimodal-temporal",
         )
+
+    def _multimodal_ollama_chat_url(self) -> str:
+        return self.settings.acuifero_multimodal_base_url.rstrip("/").removesuffix("/v1") + "/api/chat"
 
     def _assess_text(self, pack: TemporalEvidencePack) -> AssessmentVerdict | None:
         raw = self.llm.generate_text(SYSTEM_PROMPT, self._build_user_prompt(pack), max_tokens=420)

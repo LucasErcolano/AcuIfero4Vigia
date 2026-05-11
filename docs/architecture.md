@@ -93,18 +93,29 @@ Default local runtime for the fixed Acuifero node:
 
 - Ollama installed under `tools/ollama`
 - `gemma4:e2b` as the default model for a Raspberry Pi 5 with 8 GB RAM
-- `ACUIFERO_NODE_PROFILE=raspberry-pi-8gb`
+- `ACUIFERO_NODE_PROFILE=raspberry-pi-8gb-hybrid`
 - `ACUIFERO_DATA_DIR=/mnt/acuifero/data` on SSD/NVMe
 - `ACUIFERO_MAX_CURATED_FRAMES=3`
 - `ACUIFERO_ARTIFACT_RETENTION_DAYS=7`
 - `ACUIFERO_MULTIMODAL_ENABLED=false`
-- repo helper scripts: `scripts/install_ollama_local.sh` and `scripts/run_gemma_local.sh`
+- `ACUIFERO_MULTIMODAL_VERIFIER_ENABLED=true`
+- `ACUIFERO_MULTIMODAL_BASE_URL=http://127.0.0.1:11434/v1`
+- `ACUIFERO_MULTIMODAL_MODEL=gemma4:e2b`
+- `ACUIFERO_MULTIMODAL_MIN_INTERVAL_SECONDS=300`
+- repo helper scripts: `scripts/install_ollama_local.sh`, `scripts/run_gemma_local.sh`,
+  and `scripts/run_acuifero_pi8_hybrid.sh`
 - LiteRT runner kept as an explicit future target, not the current default implementation
 
 On Raspberry Pi 8 GB, Acuifero is text-first: OpenCV curates frames and numeric
 temporal hints locally, while Gemma receives the bounded evidence summary. Inline
-multimodal image prompting is intentionally disabled by default for RAM and
-latency. Bigger x86/GPU nodes may opt in with `ACUIFERO_MULTIMODAL_ENABLED=true`.
+multimodal prompting is disabled for the primary assessment, but a separate
+Gemma 4 multimodal verifier can inspect one optimized evidence frame every five
+minutes or immediately on critical-line events. Bigger x86/GPU nodes may opt in
+with `ACUIFERO_MULTIMODAL_ENABLED=true` for the primary assessment.
+
+`scripts/node_guard.py` is the deployable fixed-camera loop for this profile: it
+records short clips from `ACUIFERO_CAMERA_SOURCE`, posts them to `/api/node/analyze`,
+and lets the backend enforce the multimodal cadence and event triggers.
 
 `Vigia` is not part of this fixed-node hardware target. It remains a separate
 volunteer/user node and can run on Android/PWA/client hardware independently.
