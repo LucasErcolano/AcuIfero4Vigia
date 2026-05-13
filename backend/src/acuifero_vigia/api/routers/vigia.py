@@ -94,7 +94,12 @@ async def create_report(
     session.refresh(alert)
 
     if alert.local_alarm_triggered:
-        print(f"!!! LOCAL ALARM TRIGGERED FOR SITE {site_id} FROM VOLUNTEER REPORT !!!")
+        _LOGGER.info(
+            "local alarm triggered for site %s (alert id=%s level=%s)",
+            site_id,
+            alert.id,
+            alert.level,
+        )
 
     if photo_path and image_assessor.settings.vigia_image_enabled:
         background_tasks.add_task(_enrich_with_image_assessment, parsed.id, photo_path)
