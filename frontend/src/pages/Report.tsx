@@ -42,10 +42,12 @@ export default function Report() {
     }
   }, [sites.length, isOnline, fetchSites]);
 
-  // When the mic produces a blob, push it into audioFile.
+  // When the mic produces a blob, push it into audioFile. The audioBlob
+  // arrives async from MediaRecorder's onstop, so we react to it here.
   useEffect(() => {
     if (audioBlob) {
       const file = new File([audioBlob], 'note.webm', { type: 'audio/webm' });
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- audioBlob is an async output of the recorder hook
       setAudioFile(file);
     }
   }, [audioBlob]);

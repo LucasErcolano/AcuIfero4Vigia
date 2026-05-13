@@ -97,6 +97,7 @@ Demo machines with GPU acceleration (the production target via MediaPipe on Andr
 - Real-device benchmarks for on-device Gemma latency are pending. The numbers in `docs/hackathon/android_gemma.md` are still projections.
 - iOS Safari `MediaRecorder` has well-known quirks; the PWA targets Chrome-class browsers for the hackathon demo. This belongs in the pitch script.
 - Tool-call dispatch is gated on Ollama Gemma 4 emitting valid `tool_calls`, verified in Phase 0 V1 of this branch. If a different model is wired in, the behaviour falls back to an empty actuator list — no actuators fired, no error raised.
+- `frontend/src/pages/Calibration.tsx` has a pre-existing lint error (`react-hooks/immutability`: `draw` referenced before declaration). This bug is from commit `ce62b88` (P5 calibration UI, pre-Vigía branch). It is not introduced by this PR and is left for a separate fix so the diff stays focused on Vigía.
 
 ## 7. How to reproduce the demo flow
 
