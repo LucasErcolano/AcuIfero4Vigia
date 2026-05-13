@@ -5,6 +5,7 @@ backend/data/*.db
 backend/data/uploads/
 backend/data/logs/
 backend/data/ollama-models/
+backend/data/whisper-models/
 backend/**/*.log
 backend/**/__pycache__/
 backend/**/*.pyc

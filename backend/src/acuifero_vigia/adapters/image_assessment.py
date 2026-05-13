@@ -112,7 +112,12 @@ class GemmaImageAssessmentAdapter:
         return self.settings.llm_model
 
     def assess(self, image_path: str | Path) -> ImageAssessmentResult | None:
-        if not self.settings.llm_enabled or not self.settings.acuifero_multimodal_enabled:
+        if not self.settings.llm_enabled:
+            return None
+        multimodal_allowed = (
+            self.settings.acuifero_multimodal_enabled or self.settings.vigia_image_enabled
+        )
+        if not multimodal_allowed:
             return None
         path = Path(image_path)
         if not path.exists():
