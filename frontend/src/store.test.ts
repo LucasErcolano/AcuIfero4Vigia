@@ -86,4 +86,41 @@ describe('AppStore', () => {
     expect(fetchMock).not.toHaveBeenCalled();
     expect(alertMock).toHaveBeenCalledWith('Cannot flush queue while offline');
   });
+
+  it('flushQueue forwards webm audio blob with correct filename and type', async () => {
+    const webmBlob = new Blob([new Uint8Array([1, 2, 3, 4])], { type: 'audio/webm' });
+    const mockReports: PendingReport[] = [
+      {
+        id: 7,
+        site_id: 'site-mic',
+        reporter_name: 'Voz',
+        reporter_role: 'Community Member',
+        transcript_text: 'Nota grabada',
+        audio_attachment: {
+          blob: webmBlob,
+          name: 'note.webm',
+          type: 'audio/webm',
+        },
+        offline_created: false,
+        createdAt: 456,
+      },
+    ];
+
+    vi.mocked(idb.getPendingReports).mockResolvedValue(mockReports);
+
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ id: 7 }),
+    } as Response);
+
+    await useAppStore.getState().flushQueue();
+
+    const reportCall = fetchMock.mock.calls[0];
+    const formData = reportCall[1]?.body as FormData;
+    const audioEntry = formData.get('audio');
+    expect(audioEntry).toBeInstanceOf(File);
+    expect((audioEntry as File).name).toBe('note.webm');
+    expect((audioEntry as File).type).toBe('audio/webm');
+    expect(idb.deleteReportOffline).toHaveBeenCalledWith(7);
+  });
 });
