@@ -17,6 +17,12 @@ frontend/**/*.log
 tools/ollama/
 fixtures/media/
 fixtures/frames/
+
+android/local.properties
+android/.gradle/
+android/app/build/
+android/build/
+android/.idea/
 .codex
 .codex/
 

@@ -6,9 +6,12 @@ import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
+import com.acuifero.vigia.android.data.GemmaOnDevice
 import com.acuifero.vigia.android.data.SyncQueuedReportsWorker
 
 class AcuiferoApplication : Application() {
+    val gemma: GemmaOnDevice by lazy { GemmaOnDevice(this) }
+
     override fun onCreate() {
         super.onCreate()
         val request = OneTimeWorkRequestBuilder<SyncQueuedReportsWorker>()

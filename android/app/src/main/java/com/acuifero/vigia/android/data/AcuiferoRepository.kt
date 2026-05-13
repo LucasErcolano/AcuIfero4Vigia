@@ -9,8 +9,8 @@ import retrofit2.HttpException
 
 class AcuiferoRepository private constructor(
     context: Context,
+    db: AppDatabase = AppDatabase.get(context),
 ) {
-    private val db = AppDatabase.get(context)
     private val dao = db.pendingReportDao()
     private val configStore = ServerConfigStore(context)
 
@@ -146,5 +146,9 @@ class AcuiferoRepository private constructor(
         fun get(context: Context): AcuiferoRepository = instance ?: synchronized(this) {
             instance ?: AcuiferoRepository(context.applicationContext).also { instance = it }
         }
+
+        /** Test seam — never wire this in production code. */
+        internal fun forTest(context: Context, db: AppDatabase): AcuiferoRepository =
+            AcuiferoRepository(context.applicationContext, db)
     }
 }
