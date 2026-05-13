@@ -140,6 +140,10 @@ class GemmaImageAssessmentAdapter:
             "model": model_name,
             "stream": False,
             "format": "json",
+            # Gemma 4 routes output into message.thinking by default; disable so
+            # message.content holds the JSON we asked for (same workaround used
+            # in adapters/llm.py).
+            "think": False,
             "messages": [
                 {"role": "system", "content": FEW_SHOT_SYSTEM},
                 {
@@ -148,10 +152,10 @@ class GemmaImageAssessmentAdapter:
                     "images": [encoded_image],
                 },
             ],
-            "options": {"temperature": 0.1, "num_predict": 256},
+            "options": {"temperature": 0.1, "num_predict": self.settings.image_max_tokens},
         }
         try:
-            with httpx.Client(timeout=self.settings.llm_timeout_seconds) as client:
+            with httpx.Client(timeout=self.settings.image_timeout_seconds) as client:
                 response = client.post(self._ollama_chat_url(), json=payload)
                 response.raise_for_status()
             body = response.json()

@@ -76,6 +76,8 @@ The chip is informational; it does not gate submission or escalation.
 | `ACUIFERO_ASR_MODEL_SIZE` | `"tiny"` | Faster-Whisper model size. `tiny` is int8-quantized, ~75 MB cache, ~3× realtime on CPU. |
 | `ACUIFERO_ASR_MODEL_CACHE_DIR` | `backend/data/whisper-models` | Local cache directory for the downloaded Whisper weights. |
 | `ACUIFERO_VIGIA_IMAGE_ENABLED` | inherits `ACUIFERO_MULTIMODAL_ENABLED` | Separate flag so volunteer-photo assessment can be enabled while node-side multimodal stays off (or vice versa). |
+| `ACUIFERO_IMAGE_MAX_TOKENS` | `256` | Output token cap for the multimodal image assessor. On CPU-only dev hardware ~75% of latency is vision-encoder prompt processing (768x768 patches); dropping output tokens helps but is not the bottleneck. Use together with `ACUIFERO_IMAGE_TIMEOUT_SECONDS`. |
+| `ACUIFERO_IMAGE_TIMEOUT_SECONDS` | `300` | HTTP timeout for `image_assessor.assess`. Decoupled from `ACUIFERO_LLM_TIMEOUT_SECONDS` so a slow multimodal call does not force the structuring/reasoning pipeline to wait that long. On CPU-only dev with `IMAGE_MAX_TOKENS=120` the assess completes in ~190–220 s, so 300 s gives margin. |
 | `ACUIFERO_ACTUATORS_ENABLED` | `true` | When `false`, `dispatch_actuators` is short-circuited and no tool calls are issued regardless of alert level. |
 
 ## 5. Latency on CPU-only dev hardware (Ryzen 7, no GPU)

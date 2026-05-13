@@ -37,6 +37,8 @@ class Settings:
     asr_model_size: str
     asr_model_cache_dir: Path
     vigia_image_enabled: bool
+    image_max_tokens: int
+    image_timeout_seconds: float
     actuators_enabled: bool
 
 
@@ -87,5 +89,7 @@ def get_settings() -> Settings:
         asr_model_size=os.environ.get("ACUIFERO_ASR_MODEL_SIZE", "tiny"),
         asr_model_cache_dir=asr_model_cache_dir,
         vigia_image_enabled=_as_bool("ACUIFERO_VIGIA_IMAGE_ENABLED", acuifero_multimodal_enabled_default),
+        image_max_tokens=int(os.environ.get("ACUIFERO_IMAGE_MAX_TOKENS", "256")),
+        image_timeout_seconds=float(os.environ.get("ACUIFERO_IMAGE_TIMEOUT_SECONDS", "300")),
         actuators_enabled=_as_bool("ACUIFERO_ACTUATORS_ENABLED", True),
     )
