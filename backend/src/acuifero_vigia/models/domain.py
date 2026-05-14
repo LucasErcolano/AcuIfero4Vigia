@@ -116,6 +116,7 @@ class HydrometSnapshot(SQLModel, table=True):
 class FusedAlert(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     site_id: str = Field(index=True)
+    incident_id: Optional[int] = Field(default=None, index=True)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     level: str
     score: float
@@ -127,6 +128,35 @@ class FusedAlert(SQLModel, table=True):
     reasoning_summary: Optional[str] = None
     reasoning_chain: Optional[str] = None
     reasoning_model: Optional[str] = None
+
+
+class Incident(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    site_id: str = Field(index=True)
+    current_level: str = "green"
+    lifecycle_state: str = "monitoring"
+    opened_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    closed_at: Optional[datetime] = None
+    acknowledged_at: Optional[datetime] = None
+    acknowledged_by: Optional[str] = None
+    close_reason: Optional[str] = None
+    evidence_window_minutes: int = 45
+    summary: str = ""
+    sync_status: str = "pending"
+
+
+class ActuationRecord(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    alert_id: Optional[int] = Field(default=None, index=True)
+    incident_id: Optional[int] = Field(default=None, index=True)
+    site_id: str = Field(index=True)
+    actuator_type: str = Field(index=True)
+    payload: str = "{}"
+    status: str = "pending"
+    error: Optional[str] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    sync_status: str = "pending"
 
 
 class AcuiferoAssessmentArtifact(SQLModel, table=True):
@@ -156,4 +186,8 @@ class SyncQueueItem(SQLModel, table=True):
     entity_id: int
     payload: str
     created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: Optional[datetime] = None
     status: str = "pending"
+    attempts: int = 0
+    last_error: Optional[str] = None
+    synced_at: Optional[datetime] = None

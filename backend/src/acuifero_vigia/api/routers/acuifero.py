@@ -12,7 +12,7 @@ from acuifero_vigia.api.deps import acuifero_engine, enqueue_entity, image_asses
 from acuifero_vigia.api.serializers import serialize_observation
 from acuifero_vigia.core.settings import get_settings
 from acuifero_vigia.db.database import get_session
-from acuifero_vigia.models.domain import AcuiferoAssessmentArtifact, FusedAlert, NodeObservation, Site
+from acuifero_vigia.models.domain import AcuiferoAssessmentArtifact, ActuationRecord, FusedAlert, Incident, NodeObservation, Site
 from acuifero_vigia.services.acuifero_assessment import AcuiferoAssessment, AcuiferoAssessmentEngine
 from acuifero_vigia.services.calibration import get_latest_site_calibration
 from acuifero_vigia.services.decision_engine import recompute_site_alert
@@ -175,6 +175,12 @@ def create_node_observation(
     alert = recompute_site_alert(session, site_id, llm_client)
     session.flush()
     enqueue_entity(session, "fused_alert", alert)
+    if alert.incident_id is not None:
+        incident = session.get(Incident, alert.incident_id)
+        if incident is not None:
+            enqueue_entity(session, "incident", incident)
+    for record in session.exec(select(ActuationRecord).where(ActuationRecord.alert_id == alert.id)).all():
+        enqueue_entity(session, "actuation_record", record)
     session.commit()
     session.refresh(observation)
     session.refresh(alert)

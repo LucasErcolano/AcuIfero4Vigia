@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
 
-from sqlmodel import SQLModel, Session
+from sqlmodel import SQLModel, Session, select
 
 from acuifero_vigia.adapters.asr import FasterWhisperASRAdapter
 from acuifero_vigia.adapters.image_assessment import GemmaImageAssessmentAdapter
@@ -30,6 +31,18 @@ is_online = True
 def enqueue_entity(session: Session, entity_type: str, entity: SQLModel) -> None:
     entity_id = getattr(entity, "id", None)
     if entity_id is None:
+        return
+    existing = session.exec(
+        select(SyncQueueItem)
+        .where(SyncQueueItem.entity_type == entity_type)
+        .where(SyncQueueItem.entity_id == entity_id)
+        .where(SyncQueueItem.status == "pending")
+    ).first()
+    if existing is not None:
+        existing.payload = json.dumps(entity.model_dump(mode="json"), ensure_ascii=True)
+        existing.updated_at = datetime.utcnow()
+        existing.last_error = None
+        session.add(existing)
         return
     queue_item = SyncQueueItem(
         entity_type=entity_type,

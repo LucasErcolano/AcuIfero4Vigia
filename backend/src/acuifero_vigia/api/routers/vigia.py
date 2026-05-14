@@ -14,7 +14,7 @@ from acuifero_vigia.api.deps import (
     text_structurer,
 )
 from acuifero_vigia.db.database import get_session, session_scope
-from acuifero_vigia.models.domain import ParsedObservation, Site, VolunteerReport
+from acuifero_vigia.models.domain import ActuationRecord, Incident, ParsedObservation, Site, VolunteerReport
 from acuifero_vigia.services.decision_engine import recompute_site_alert
 from acuifero_vigia.services.report_structuring import structure_report, structured_result_to_json
 from acuifero_vigia.services.storage import persist_upload
@@ -88,6 +88,12 @@ async def create_report(
     alert = recompute_site_alert(session, site_id, llm_client)
     session.flush()
     enqueue_entity(session, "fused_alert", alert)
+    if alert.incident_id is not None:
+        incident = session.get(Incident, alert.incident_id)
+        if incident is not None:
+            enqueue_entity(session, "incident", incident)
+    for record in session.exec(select(ActuationRecord).where(ActuationRecord.alert_id == alert.id)).all():
+        enqueue_entity(session, "actuation_record", record)
     session.commit()
     session.refresh(report)
     session.refresh(parsed)

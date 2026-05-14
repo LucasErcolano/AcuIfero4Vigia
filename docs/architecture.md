@@ -74,12 +74,44 @@ Team ownership guideline:
 - output: `HydrometSnapshot`
 - used to enrich site detail pages and to boost fused risk when weather and river conditions support escalation
 
-### Alert fusion
+### Central integration and incident lifecycle
 
-- takes the strongest available site signal as the base score
-- uses the Gemma-first node assessment package as the node input
-- adds a boost when multiple sources support the same escalation
-- produces a `FusedAlert` and decides whether a local alarm should be triggered
+The central layer now treats Acuifero, Vigia, and hydromet records as evidence
+for one operational decision. `services/decision_engine.py` evaluates a default
+45 minute evidence window per site, applies temporal decay, detects
+corroboration across sources, records contradictions, and emits a structured
+`decision_trace` with the exact evidence IDs, weights, rules, and severity
+contract used.
+
+Severity is normalized to a 0.0-1.0 score:
+
+- `green`: no recent operational risk evidence.
+- `yellow`: incipient risk or moderate local evidence that requires monitoring.
+- `orange`: high corroborated risk or one critical source that requires local preparation/action.
+- `red`: severe observed risk or impact requiring immediate action.
+
+`FusedAlert` remains the operator-facing projection. It is linked to an
+`Incident` when the site has sustained yellow risk, any orange/red alert, or a
+critical human report. Recomputes update the active incident instead of opening a
+new incident for every alert. Incidents move through `monitoring`, `active`,
+`escalated`, `stabilizing`, and `closed`.
+
+Actuation is separated from the decision. The engine recommends siren, radio,
+and app actions for orange/red alerts, records every attempt in
+`ActuationRecord`, and uses incident-level idempotency so repeated recomputes do
+not refire the same critical action.
+
+Operator endpoints:
+
+- `GET /api/sites/{site_id}/operator-summary`
+- `GET /api/incidents/{incident_id}/timeline`
+- `POST /api/incidents/{incident_id}/ack`
+- `POST /api/incidents/{incident_id}/close`
+- `POST /api/alerts/{alert_id}/export-sinagir`
+
+Sync now includes queue attempts, last error, synced timestamp, partial failure
+status, idempotent queue updates for the same pending entity, and
+`GET /api/sync/status`.
 
 ## Runtime model contract
 
@@ -136,6 +168,8 @@ Operational local state:
 - `ParsedObservation`
 - `HydrometSnapshot`
 - `FusedAlert`
+- `Incident`
+- `ActuationRecord`
 - `SyncQueueItem`
 
 `NodeObservation` is the compatibility-facing projection. `AcuiferoAssessmentArtifact` stores the richer audit pack for demos and review.
