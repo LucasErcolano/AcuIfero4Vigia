@@ -23,6 +23,7 @@ class Settings:
     upload_dir: Path
     edge_db_path: Path
     central_db_path: Path
+    ffmpeg_bin: str
     llm_enabled: bool
     llm_base_url: str
     llm_model: str
@@ -36,6 +37,8 @@ class Settings:
     acuifero_multimodal_score_threshold: float
     acuifero_multimodal_confidence_threshold: float
     acuifero_multimodal_image_max_side: int
+    acuifero_multimodal_max_frames: int
+    acuifero_multimodal_frame_sample_seconds: int
     acuifero_multimodal_num_ctx: int
     acuifero_multimodal_num_predict: int
     acuifero_multimodal_timeout_seconds: float
@@ -50,14 +53,21 @@ def get_settings() -> Settings:
     backend_root = Path(__file__).resolve().parents[3]
     project_root = backend_root.parent
     data_dir = Path(os.environ.get("ACUIFERO_DATA_DIR", str(backend_root / "data")))
-    acuifero_node_profile = os.environ.get("ACUIFERO_NODE_PROFILE", "raspberry-pi-8gb-hybrid")
-    is_raspberry_profile = acuifero_node_profile.strip().lower() in {
+    acuifero_node_profile = os.environ.get("ACUIFERO_NODE_PROFILE", "raspberry-pi-8gb-multimodal-demo")
+    normalized_profile = acuifero_node_profile.strip().lower()
+    is_pi8_demo_profile = normalized_profile in {
         "raspberry-pi-8gb",
-        "raspberry-pi-8gb-hybrid",
+        "raspberry-pi-8gb-multimodal-demo",
         "raspberry-pi",
         "rpi8gb",
         "rpi",
     }
+    is_pi16_prod_profile = normalized_profile in {
+        "raspberry-pi-16gb",
+        "raspberry-pi-16gb-multimodal-prod",
+        "rpi16gb",
+    }
+    is_raspberry_profile = is_pi8_demo_profile or is_pi16_prod_profile
     upload_dir = Path(os.environ.get("ACUIFERO_UPLOAD_DIR", str(data_dir / "uploads")))
 
     edge_db_path = Path(os.environ.get("ACUIFERO_EDGE_DB_PATH", str(data_dir / "edge.db")))
@@ -71,15 +81,16 @@ def get_settings() -> Settings:
         upload_dir=upload_dir,
         edge_db_path=edge_db_path,
         central_db_path=central_db_path,
+        ffmpeg_bin=os.environ.get("ACUIFERO_FFMPEG_BIN", "ffmpeg"),
         llm_enabled=_as_bool("ACUIFERO_LLM_ENABLED", True),
         llm_base_url=os.environ.get("ACUIFERO_LLM_BASE_URL", "http://127.0.0.1:11434/v1"),
         llm_model=os.environ.get("ACUIFERO_LLM_MODEL", "gemma4:e2b"),
         llm_api_key=os.environ.get("ACUIFERO_LLM_API_KEY", "ollama"),
         llm_timeout_seconds=float(os.environ.get("ACUIFERO_LLM_TIMEOUT_SECONDS", "30")),
-        acuifero_multimodal_enabled=_as_bool("ACUIFERO_MULTIMODAL_ENABLED", not is_raspberry_profile),
+        acuifero_multimodal_enabled=_as_bool("ACUIFERO_MULTIMODAL_ENABLED", True),
         acuifero_multimodal_verifier_enabled=_as_bool(
             "ACUIFERO_MULTIMODAL_VERIFIER_ENABLED",
-            is_raspberry_profile,
+            False,
         ),
         acuifero_multimodal_base_url=os.environ.get(
             "ACUIFERO_MULTIMODAL_BASE_URL",
@@ -99,19 +110,35 @@ def get_settings() -> Settings:
             os.environ.get("ACUIFERO_MULTIMODAL_CONFIDENCE_THRESHOLD", "0.62")
         ),
         acuifero_multimodal_image_max_side=int(
-            os.environ.get("ACUIFERO_MULTIMODAL_IMAGE_MAX_SIDE", "768" if is_raspberry_profile else "1024")
+            os.environ.get(
+                "ACUIFERO_MULTIMODAL_IMAGE_MAX_SIDE",
+                "512" if is_pi8_demo_profile else "960" if is_pi16_prod_profile else "1024",
+            )
         ),
-        acuifero_multimodal_num_ctx=int(os.environ.get("ACUIFERO_MULTIMODAL_NUM_CTX", "2048")),
-        acuifero_multimodal_num_predict=int(os.environ.get("ACUIFERO_MULTIMODAL_NUM_PREDICT", "256")),
+        acuifero_multimodal_max_frames=int(
+            os.environ.get("ACUIFERO_MULTIMODAL_MAX_FRAMES", "1" if is_pi8_demo_profile else "4")
+        ),
+        acuifero_multimodal_frame_sample_seconds=int(
+            os.environ.get("ACUIFERO_MULTIMODAL_FRAME_SAMPLE_SECONDS", "300" if is_pi8_demo_profile else "60")
+        ),
+        acuifero_multimodal_num_ctx=int(
+            os.environ.get("ACUIFERO_MULTIMODAL_NUM_CTX", "1024" if is_pi8_demo_profile else "4096")
+        ),
+        acuifero_multimodal_num_predict=int(
+            os.environ.get("ACUIFERO_MULTIMODAL_NUM_PREDICT", "192" if is_pi8_demo_profile else "512")
+        ),
         acuifero_multimodal_timeout_seconds=float(
-            os.environ.get("ACUIFERO_MULTIMODAL_TIMEOUT_SECONDS", "180" if is_raspberry_profile else "60")
+            os.environ.get("ACUIFERO_MULTIMODAL_TIMEOUT_SECONDS", "300" if is_pi8_demo_profile else "180")
         ),
         hydromet_enabled=_as_bool("ACUIFERO_HYDROMET_ENABLED", True),
         hydromet_timeout_seconds=float(os.environ.get("ACUIFERO_HYDROMET_TIMEOUT_SECONDS", "12")),
         acuifero_max_curated_frames=int(
-            os.environ.get("ACUIFERO_MAX_CURATED_FRAMES", "3" if is_raspberry_profile else "6")
+            os.environ.get("ACUIFERO_MAX_CURATED_FRAMES", "1" if is_pi8_demo_profile else "4" if is_pi16_prod_profile else "6")
         ),
         acuifero_artifact_retention_days=int(
-            os.environ.get("ACUIFERO_ARTIFACT_RETENTION_DAYS", "7" if is_raspberry_profile else "14")
+            os.environ.get(
+                "ACUIFERO_ARTIFACT_RETENTION_DAYS",
+                "3" if is_pi8_demo_profile else "14",
+            )
         ),
     )

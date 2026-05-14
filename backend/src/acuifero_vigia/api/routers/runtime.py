@@ -38,6 +38,7 @@ async def get_runtime_status() -> RuntimeStatus:
         acuifero={
             "node_profile": settings.acuifero_node_profile,
             "data_dir": str(settings.data_dir),
+            "ffmpeg_bin": settings.ffmpeg_bin,
             "multimodal_enabled": settings.acuifero_multimodal_enabled,
             "multimodal_verifier_enabled": settings.acuifero_multimodal_verifier_enabled,
             "multimodal_base_url": settings.acuifero_multimodal_base_url,
@@ -46,6 +47,8 @@ async def get_runtime_status() -> RuntimeStatus:
             "multimodal_score_threshold": settings.acuifero_multimodal_score_threshold,
             "multimodal_confidence_threshold": settings.acuifero_multimodal_confidence_threshold,
             "multimodal_image_max_side": settings.acuifero_multimodal_image_max_side,
+            "multimodal_max_frames": settings.acuifero_multimodal_max_frames,
+            "multimodal_frame_sample_seconds": settings.acuifero_multimodal_frame_sample_seconds,
             "multimodal_num_ctx": settings.acuifero_multimodal_num_ctx,
             "multimodal_timeout_seconds": settings.acuifero_multimodal_timeout_seconds,
             "max_curated_frames": settings.acuifero_max_curated_frames,

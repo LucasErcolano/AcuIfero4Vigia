@@ -13,9 +13,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
-import cv2
 import httpx
-import numpy as np
+from PIL import Image, ImageOps
 
 from acuifero_vigia.core.settings import get_settings
 
@@ -82,25 +81,18 @@ def _build_user_prompt() -> str:
 
 
 def _encode_image(path: Path, *, max_side: int, jpeg_quality: int = 82) -> str:
-    raw = path.read_bytes()
-    image = cv2.imdecode(np.frombuffer(raw, dtype=np.uint8), cv2.IMREAD_COLOR)
-    if image is None:
-        return base64.b64encode(raw).decode("ascii")
+    try:
+        from io import BytesIO
 
-    height, width = image.shape[:2]
-    longest_side = max(height, width)
-    if max_side > 0 and longest_side > max_side:
-        scale = max_side / float(longest_side)
-        image = cv2.resize(
-            image,
-            (max(1, int(width * scale)), max(1, int(height * scale))),
-            interpolation=cv2.INTER_AREA,
-        )
-
-    ok, encoded = cv2.imencode(".jpg", image, [int(cv2.IMWRITE_JPEG_QUALITY), jpeg_quality])
-    if not ok:
-        return base64.b64encode(raw).decode("ascii")
-    return base64.b64encode(encoded.tobytes()).decode("ascii")
+        with Image.open(path) as image:
+            image = ImageOps.exif_transpose(image).convert("RGB")
+            if max_side > 0:
+                image.thumbnail((max_side, max_side), Image.Resampling.LANCZOS)
+            buffer = BytesIO()
+            image.save(buffer, format="JPEG", quality=jpeg_quality, optimize=True)
+            return base64.b64encode(buffer.getvalue()).decode("ascii")
+    except Exception:
+        return base64.b64encode(path.read_bytes()).decode("ascii")
 
 
 def _parse_json_block(text: str) -> dict | None:
@@ -117,11 +109,7 @@ def _parse_json_block(text: str) -> dict | None:
 
 
 class GemmaImageAssessmentAdapter:
-    """Calls Gemma through Ollama's `/api/chat` with one optimized image.
-
-    The Raspberry Pi profile uses this as an occasional verifier, not as the
-    always-on visual detector. OpenCV does the continuous frame processing.
-    """
+    """Calls Gemma through Ollama's `/api/chat` with one optimized image."""
 
     def __init__(self) -> None:
         self.settings = get_settings()

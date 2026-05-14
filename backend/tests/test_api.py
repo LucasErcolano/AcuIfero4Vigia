@@ -5,11 +5,10 @@ from io import BytesIO
 from pathlib import Path
 
 import anyio
-import cv2
 import httpx
-import numpy as np
 import pytest
 from fastapi import UploadFile
+from PIL import Image, ImageDraw
 from sqlmodel import Session, SQLModel, select
 
 from acuifero_vigia.api import deps
@@ -81,20 +80,12 @@ def reset_state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
 
 
-def _build_test_video(path: Path) -> None:
-    width, height = 320, 240
-    writer = cv2.VideoWriter(str(path), cv2.VideoWriter_fourcc(*"MJPG"), 4.0, (width, height))
-    if not writer.isOpened():
-        raise RuntimeError("Could not create synthetic test video")
-
-    for index in range(16):
-        frame = np.full((height, width, 3), (200, 210, 220), dtype=np.uint8)
-        waterline_y = max(70, 210 - index * 9)
-        cv2.rectangle(frame, (0, waterline_y), (width - 1, height - 1), (90, 70, 40), -1)
-        cv2.line(frame, (0, 100), (width - 1, 100), (245, 245, 245), 2)
-        writer.write(frame)
-
-    writer.release()
+def _build_test_image(path: Path) -> None:
+    image = Image.new("RGB", (320, 240), (200, 210, 220))
+    draw = ImageDraw.Draw(image)
+    draw.rectangle((0, 132, 319, 239), fill=(90, 70, 40))
+    draw.line((0, 95, 319, 95), fill=(245, 245, 245), width=2)
+    image.save(path, format="JPEG")
 
 
 
@@ -187,9 +178,9 @@ def test_report_uploads_are_persisted():
 
 
 
-def test_node_analysis_with_video(tmp_path: Path):
-    video_path = tmp_path / "synthetic.avi"
-    _build_test_video(video_path)
+def test_node_analysis_with_image_media(tmp_path: Path):
+    video_path = tmp_path / "synthetic.jpg"
+    _build_test_image(video_path)
 
     async def run_flow():
         with video_path.open("rb") as handle:
@@ -198,15 +189,13 @@ def test_node_analysis_with_video(tmp_path: Path):
                 return await analyze_node(site_id="test-site", video=upload, session=edge_session)
 
     payload = anyio.run(run_flow)
-    assert payload["observation"]["frames_analyzed"] >= 3
-    assert payload["observation"]["confidence"] > 0
+    assert payload["observation"]["frames_analyzed"] == 1
     assert payload["observation"]["evidence_frame_url"].startswith("/uploads/")
-    assert payload["observation"]["assessment_mode"] == "temporal-gemma-v1"
+    assert payload["observation"]["assessment_mode"] == "gemma4-multimodal-v1"
     assert payload["observation"]["artifact_id"] is not None
     assert payload["observation"]["runner"]["mode"] in {
         "ollama-multimodal-temporal",
-        "text-only-temporal",
-        "deterministic-fallback",
+        "multimodal-unavailable-fallback",
     }
     assert payload["observation"]["temporal_summary"]
     assert isinstance(payload["observation"]["reasoning_steps"], list)
@@ -221,14 +210,14 @@ def test_node_analysis_with_video(tmp_path: Path):
         assert observation.assessment_artifact_id is not None
         artifact = session.get(AcuiferoAssessmentArtifact, observation.assessment_artifact_id)
         assert artifact is not None
-        assert artifact.frames_analyzed >= 3
+        assert artifact.frames_analyzed == 1
         assert artifact.bundle_json
         assert artifact.verdict_json
 
 
 def test_sample_node_analysis_endpoint(tmp_path: Path):
-    video_path = tmp_path / "sample.avi"
-    _build_test_video(video_path)
+    video_path = tmp_path / "sample.jpg"
+    _build_test_image(video_path)
 
     with Session(edge_engine) as session:
         session.add(
@@ -259,10 +248,10 @@ def test_sample_node_analysis_endpoint(tmp_path: Path):
     response = request("POST", "/api/sites/sample-site/sample-node-analysis")
     assert response.status_code == 200
     payload = response.json()
-    assert payload["observation"]["frames_analyzed"] >= 3
+    assert payload["observation"]["frames_analyzed"] == 1
     assert payload["observation"]["evidence_frame_url"].startswith("/uploads/")
     assert payload["observation"]["artifact_id"] is not None
-    assert payload["observation"]["assessment_mode"] == "temporal-gemma-v1"
+    assert payload["observation"]["assessment_mode"] == "gemma4-multimodal-v1"
     assert payload["sample_video_source_url"] == "https://example.com/fixed-cam"
 
 

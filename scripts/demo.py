@@ -3,34 +3,25 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
-import cv2
 import httpx
-import numpy as np
+from PIL import Image, ImageDraw
 
 API_URL = 'http://localhost:8000/api'
 
 
-def build_demo_video(path: Path) -> None:
-    width, height = 320, 240
-    writer = cv2.VideoWriter(str(path), cv2.VideoWriter_fourcc(*'MJPG'), 4.0, (width, height))
-    if not writer.isOpened():
-        raise RuntimeError('Could not create demo video')
-
-    for index in range(16):
-        frame = np.full((height, width, 3), (210, 215, 225), dtype=np.uint8)
-        waterline_y = max(75, 210 - index * 9)
-        cv2.rectangle(frame, (0, waterline_y), (width - 1, height - 1), (90, 70, 40), -1)
-        cv2.line(frame, (0, 100), (width - 1, 100), (245, 245, 245), 2)
-        writer.write(frame)
-
-    writer.release()
+def build_demo_frame(path: Path) -> None:
+    image = Image.new('RGB', (320, 240), (210, 215, 225))
+    draw = ImageDraw.Draw(image)
+    draw.rectangle((0, 112, 319, 239), fill=(90, 70, 40))
+    draw.line((0, 100, 319, 100), fill=(245, 245, 245), width=2)
+    image.save(path, format='JPEG')
 
 
 print('--- Acuifero 4 + Vigia Demo Script ---')
 
 with tempfile.TemporaryDirectory() as temp_dir:
-    video_path = Path(temp_dir) / 'node-demo.avi'
-    build_demo_video(video_path)
+    video_path = Path(temp_dir) / 'node-demo.jpg'
+    build_demo_frame(video_path)
 
     print('\n1. Running bundled Silverado sample clip...')
     sample_response = httpx.post(f'{API_URL}/sites/silverado-fixed-cam-usgs/sample-node-analysis', timeout=90)
@@ -52,12 +43,12 @@ with tempfile.TemporaryDirectory() as temp_dir:
     else:
         print(f'Hydromet refresh skipped: {hydromet_response.status_code} {hydromet_response.text}')
 
-    print('\n3. Triggering fixed-node video analysis with a generated clip...')
+    print('\n3. Triggering fixed-node multimodal analysis with a generated frame...')
     with video_path.open('rb') as handle:
         node_response = httpx.post(
             f'{API_URL}/node/analyze',
             data={'site_id': 'puente-arroyo-01'},
-            files={'video': (video_path.name, handle, 'video/x-msvideo')},
+            files={'video': (video_path.name, handle, 'image/jpeg')},
             timeout=60,
         )
     node_response.raise_for_status()

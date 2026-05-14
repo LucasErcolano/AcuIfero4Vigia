@@ -1,63 +1,45 @@
 from __future__ import annotations
 
 import os
+import shutil
+import subprocess
 import tempfile
 import time
 from pathlib import Path
 
-import cv2
 import httpx
 
 
-def _camera_source(raw: str) -> int | str:
-    raw = raw.strip()
-    if raw.isdigit():
-        return int(raw)
-    return raw
+def _record_clip(source: str, target: Path, clip_seconds: float, fps: float) -> None:
+    ffmpeg_setting = os.environ.get("ACUIFERO_FFMPEG_BIN", "ffmpeg")
+    ffmpeg = shutil.which(ffmpeg_setting) or (ffmpeg_setting if Path(ffmpeg_setting).exists() else None)
+    if ffmpeg is None:
+        raise RuntimeError("ffmpeg is required; install it or set ACUIFERO_FFMPEG_BIN before running the guard")
 
+    input_args = ["-i", source]
+    if source.startswith("/dev/video"):
+        input_args = ["-f", "v4l2", "-framerate", str(max(1, int(fps))), "-i", source]
 
-def _record_clip(source: int | str, target: Path, clip_seconds: float, fps: float) -> None:
-    capture = cv2.VideoCapture(source)
-    if not capture.isOpened():
-        raise RuntimeError(f"could not open camera source {source!r}")
-
-    width = int(capture.get(cv2.CAP_PROP_FRAME_WIDTH)) or 640
-    height = int(capture.get(cv2.CAP_PROP_FRAME_HEIGHT)) or 480
-    source_fps = float(capture.get(cv2.CAP_PROP_FPS) or 0.0)
-    capture_fps = fps if fps > 0 else source_fps if source_fps > 0 else 4.0
-
-    writer = cv2.VideoWriter(
+    command = [
+        ffmpeg,
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-y",
+        *input_args,
+        "-t",
+        str(max(1.0, clip_seconds)),
+        "-r",
+        str(max(1, int(fps))),
+        "-an",
+        "-c:v",
+        "mjpeg",
         str(target),
-        cv2.VideoWriter_fourcc(*"MJPG"),
-        capture_fps,
-        (width, height),
-    )
-    if not writer.isOpened():
-        capture.release()
-        raise RuntimeError(f"could not create guard clip {target}")
-
-    deadline = time.monotonic() + clip_seconds
-    frame_period = 1.0 / capture_fps
-    next_frame_at = time.monotonic()
-    frames = 0
-    try:
-        while time.monotonic() < deadline:
-            ok, frame = capture.read()
-            if not ok:
-                time.sleep(0.1)
-                continue
-            now = time.monotonic()
-            if now < next_frame_at:
-                continue
-            writer.write(frame)
-            frames += 1
-            next_frame_at = now + frame_period
-    finally:
-        writer.release()
-        capture.release()
-
-    if frames == 0:
-        raise RuntimeError("guard clip contained no frames")
+    ]
+    result = subprocess.run(command, capture_output=True, text=True, check=False)
+    if result.returncode != 0 or not target.exists() or target.stat().st_size == 0:
+        detail = (result.stderr or result.stdout or "unknown ffmpeg error").strip()
+        raise RuntimeError(f"ffmpeg clip recording failed: {detail}")
 
 
 def _submit_clip(api_base: str, site_id: str, clip_path: Path, timeout: float) -> dict:
@@ -73,14 +55,14 @@ def _submit_clip(api_base: str, site_id: str, clip_path: Path, timeout: float) -
 def main() -> None:
     api_base = os.environ.get("ACUIFERO_API_BASE", "http://127.0.0.1:8000/api")
     site_id = os.environ.get("ACUIFERO_GUARD_SITE_ID", "silverado-fixed-cam-usgs")
-    source = _camera_source(os.environ.get("ACUIFERO_CAMERA_SOURCE", "0"))
-    interval_seconds = float(os.environ.get("ACUIFERO_GUARD_INTERVAL_SECONDS", "60"))
+    source = os.environ.get("ACUIFERO_CAMERA_SOURCE", "/dev/video0")
+    interval_seconds = float(os.environ.get("ACUIFERO_GUARD_INTERVAL_SECONDS", "300"))
     clip_seconds = float(os.environ.get("ACUIFERO_GUARD_CLIP_SECONDS", "12"))
-    fps = float(os.environ.get("ACUIFERO_GUARD_FPS", "4"))
-    timeout = float(os.environ.get("ACUIFERO_GUARD_TIMEOUT_SECONDS", "300"))
+    fps = float(os.environ.get("ACUIFERO_GUARD_FPS", "2"))
+    timeout = float(os.environ.get("ACUIFERO_GUARD_TIMEOUT_SECONDS", "600"))
 
     print(
-        "Acuifero guard started "
+        "Acuifero multimodal guard started "
         f"site_id={site_id} source={source!r} interval={interval_seconds}s clip={clip_seconds}s"
     )
     while True:
@@ -95,6 +77,7 @@ def main() -> None:
                 print(
                     "guard analysis ok "
                     f"frames={observation.get('frames_analyzed')} "
+                    f"runner={observation.get('runner', {}).get('mode')} "
                     f"level={alert.get('level')} score={alert.get('score')}"
                 )
             except Exception as exc:

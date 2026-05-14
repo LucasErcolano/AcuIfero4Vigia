@@ -4,8 +4,8 @@ import json
 from pathlib import Path
 from uuid import uuid4
 
-import cv2
 from fastapi import UploadFile
+from PIL import Image
 
 from acuifero_vigia.core.settings import get_settings
 
@@ -68,7 +68,10 @@ def persist_upload(file: UploadFile | None, prefix: str) -> str | None:
 
 def persist_frame_image(frame, prefix: str) -> str:
     target_path = get_upload_dir() / f'{prefix}-{uuid4().hex}.jpg'
-    cv2.imwrite(str(target_path), frame)
+    if isinstance(frame, Image.Image):
+        frame.convert('RGB').save(target_path, format='JPEG', quality=85, optimize=True)
+    else:
+        raise TypeError('persist_frame_image now expects a PIL.Image; Acuifero no longer depends on OpenCV')
     return str(target_path)
 
 

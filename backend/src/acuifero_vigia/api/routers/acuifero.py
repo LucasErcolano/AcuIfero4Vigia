@@ -81,21 +81,21 @@ def create_node_observation(
         "evidence_frame_path": assessment.evidence_pack.artifact_pack.evidence_frame_path,
         "retention_days": settings.acuifero_artifact_retention_days,
         "max_curated_frames": settings.acuifero_max_curated_frames,
-        "multimodal_verifier": {
-            "enabled": settings.acuifero_multimodal_verifier_enabled,
+        "multimodal_primary": {
+            "enabled": settings.acuifero_multimodal_enabled,
             "base_url": settings.acuifero_multimodal_base_url,
             "model": settings.acuifero_multimodal_model,
-            "min_interval_seconds": settings.acuifero_multimodal_min_interval_seconds,
-            "score_threshold": settings.acuifero_multimodal_score_threshold,
-            "confidence_threshold": settings.acuifero_multimodal_confidence_threshold,
+            "max_frames": settings.acuifero_multimodal_max_frames,
+            "frame_sample_seconds": settings.acuifero_multimodal_frame_sample_seconds,
             "image_max_side": settings.acuifero_multimodal_image_max_side,
+            "num_ctx": settings.acuifero_multimodal_num_ctx,
         },
     }
     artifact = AcuiferoAssessmentArtifact(
         site_id=site_id,
         source_type=source_type,
         video_path=video_path,
-        assessment_mode="temporal-gemma-v1",
+        assessment_mode="gemma4-multimodal-v1",
         frames_analyzed=assessment.evidence_pack.frames_analyzed,
         temporal_summary=assessment.verdict.temporal_summary,
         reasoning_summary=assessment.verdict.reasoning_summary,
@@ -126,7 +126,7 @@ def create_node_observation(
         except Exception:
             image_summary = None
         if image_summary is None:
-            assessment.decision_trace.append("multimodal verifier unavailable or invalid, kept text-only verdict")
+            assessment.decision_trace.append("multimodal verifier unavailable or invalid, kept primary multimodal verdict")
         else:
             assessment.decision_trace.append(
                 f"multimodal verifier {image_summary.model_name} returned confidence={image_summary.confidence:.2f}"
@@ -148,8 +148,8 @@ def create_node_observation(
         assessment_score=assessment.verdict.assessment_score,
         assessment_level=assessment.verdict.assessment_level,
         evidence_frame_path=assessment.evidence_pack.evidence_frame_path,
-        analysis_mode="temporal-evidence-builder-v1",
-        assessment_mode="temporal-gemma-v1",
+        analysis_mode="ffmpeg-frame-sampler-v1",
+        assessment_mode="gemma4-multimodal-v1",
         temporal_summary=assessment.verdict.temporal_summary,
         reasoning_summary=assessment.verdict.reasoning_summary,
         reasoning_steps=json.dumps(assessment.verdict.reasoning_steps, ensure_ascii=True),
