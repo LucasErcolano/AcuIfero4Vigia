@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
-from sqlmodel import Session
+from sqlmodel import Session, desc, select
 
 from acuifero_vigia.api.deps import acuifero_engine, enqueue_entity, image_assessor, llm_client
 from acuifero_vigia.api.serializers import serialize_observation
@@ -19,6 +20,51 @@ from acuifero_vigia.services.storage import persist_upload, public_asset_url_for
 
 
 router = APIRouter(tags=["acuifero"])
+
+
+def _should_run_multimodal_verifier(
+    session: Session,
+    site_id: str,
+    assessment: AcuiferoAssessment,
+) -> tuple[bool, str]:
+    settings = get_settings()
+    if not settings.acuifero_multimodal_verifier_enabled:
+        return False, "disabled"
+    if not assessment.evidence_pack.evidence_frame_path:
+        return False, "no evidence frame"
+
+    triggers: list[str] = []
+    if assessment.crossed_critical_line_hint:
+        triggers.append("critical line crossed")
+    if assessment.verdict.assessment_score >= settings.acuifero_multimodal_score_threshold:
+        triggers.append(f"score>={settings.acuifero_multimodal_score_threshold:.2f}")
+    if assessment.confidence <= settings.acuifero_multimodal_confidence_threshold:
+        triggers.append(f"confidence<={settings.acuifero_multimodal_confidence_threshold:.2f}")
+
+    last_verified = session.exec(
+        select(NodeObservation)
+        .where(NodeObservation.site_id == site_id)
+        .where(NodeObservation.image_assessment_model.is_not(None))
+        .order_by(desc(NodeObservation.ended_at))
+    ).first()
+    if last_verified is None:
+        interval_due = True
+        seconds_since = None
+    else:
+        seconds_since = max(0.0, (datetime.utcnow() - last_verified.ended_at).total_seconds())
+        interval_due = seconds_since >= settings.acuifero_multimodal_min_interval_seconds
+
+    if assessment.crossed_critical_line_hint:
+        return True, "triggered: " + ", ".join(triggers)
+    if interval_due:
+        if triggers:
+            return True, "scheduled with trigger: " + ", ".join(triggers)
+        if seconds_since is None:
+            return True, "scheduled: first multimodal verification"
+        return True, f"scheduled: {seconds_since:.0f}s since last verification"
+    if triggers:
+        return False, f"interval hold after trigger ({', '.join(triggers)}): {seconds_since:.0f}s since last verification"
+    return False, f"interval hold: {seconds_since:.0f}s since last verification"
 
 
 def create_node_observation(
@@ -35,6 +81,15 @@ def create_node_observation(
         "evidence_frame_path": assessment.evidence_pack.artifact_pack.evidence_frame_path,
         "retention_days": settings.acuifero_artifact_retention_days,
         "max_curated_frames": settings.acuifero_max_curated_frames,
+        "multimodal_verifier": {
+            "enabled": settings.acuifero_multimodal_verifier_enabled,
+            "base_url": settings.acuifero_multimodal_base_url,
+            "model": settings.acuifero_multimodal_model,
+            "min_interval_seconds": settings.acuifero_multimodal_min_interval_seconds,
+            "score_threshold": settings.acuifero_multimodal_score_threshold,
+            "confidence_threshold": settings.acuifero_multimodal_confidence_threshold,
+            "image_max_side": settings.acuifero_multimodal_image_max_side,
+        },
     }
     artifact = AcuiferoAssessmentArtifact(
         site_id=site_id,
@@ -56,6 +111,26 @@ def create_node_observation(
     session.add(artifact)
     session.flush()
     enqueue_entity(session, "acuifero_assessment_artifact", artifact)
+
+    run_multimodal, multimodal_reason = _should_run_multimodal_verifier(session, site_id, assessment)
+    assessment.decision_trace.append(f"multimodal verifier {multimodal_reason}")
+
+    image_summary = None
+    if run_multimodal:
+        frame_path = (
+            resolve_local_asset_path(assessment.evidence_pack.evidence_frame_path)
+            or Path(assessment.evidence_pack.evidence_frame_path)
+        )
+        try:
+            image_summary = image_assessor.assess(frame_path)
+        except Exception:
+            image_summary = None
+        if image_summary is None:
+            assessment.decision_trace.append("multimodal verifier unavailable or invalid, kept text-only verdict")
+        else:
+            assessment.decision_trace.append(
+                f"multimodal verifier {image_summary.model_name} returned confidence={image_summary.confidence:.2f}"
+            )
 
     observation = NodeObservation(
         site_id=site_id,
@@ -86,25 +161,12 @@ def create_node_observation(
         assessment_artifact_id=artifact.id,
     )
 
-    should_assess = (
-        assessment.evidence_pack.evidence_frame_path is not None
-        and (assessment.crossed_critical_line_hint or assessment.verdict.assessment_score >= 0.5)
-    )
-    if should_assess:
-        frame_path = (
-            resolve_local_asset_path(assessment.evidence_pack.evidence_frame_path)
-            or Path(assessment.evidence_pack.evidence_frame_path)
-        )
-        try:
-            image_summary = image_assessor.assess(frame_path)
-        except Exception:
-            image_summary = None
-        if image_summary is not None:
-            observation.image_description = image_summary.description_es
-            observation.image_assessment_model = image_summary.model_name
-            observation.image_assessment_confidence = image_summary.confidence
-            observation.image_water_visible = image_summary.water_visible
-            observation.image_infrastructure_at_risk = image_summary.infrastructure_at_risk
+    if image_summary is not None:
+        observation.image_description = image_summary.description_es
+        observation.image_assessment_model = image_summary.model_name
+        observation.image_assessment_confidence = image_summary.confidence
+        observation.image_water_visible = image_summary.water_visible
+        observation.image_infrastructure_at_risk = image_summary.infrastructure_at_risk
 
     session.add(observation)
     session.flush()
@@ -202,4 +264,3 @@ async def analyze_site_sample(site_id: str, session: Session = Depends(get_sessi
         "sample_video_url": public_asset_url_for_path(site.sample_video_path),
         "sample_video_source_url": site.sample_video_source_url,
     }
-

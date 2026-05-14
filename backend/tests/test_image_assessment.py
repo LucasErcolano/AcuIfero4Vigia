@@ -37,7 +37,7 @@ def test_adapter_returns_none_for_missing_path(tmp_path: Path):
 
 
 def test_adapter_handles_http_error(monkeypatch, tmp_path: Path):
-    monkeypatch.setenv("ACUIFERO_MULTIMODAL_ENABLED", "true")
+    monkeypatch.setenv("ACUIFERO_MULTIMODAL_VERIFIER_ENABLED", "true")
     img = tmp_path / "x.jpg"
     img.write_bytes(b"\x89PNG\r\n\x1a\nfakebytes")
 
@@ -50,7 +50,7 @@ def test_adapter_handles_http_error(monkeypatch, tmp_path: Path):
 
 
 def test_adapter_parses_success(monkeypatch, tmp_path: Path):
-    monkeypatch.setenv("ACUIFERO_MULTIMODAL_ENABLED", "true")
+    monkeypatch.setenv("ACUIFERO_MULTIMODAL_VERIFIER_ENABLED", "true")
     img = tmp_path / "x.jpg"
     img.write_bytes(b"\x89PNG\r\n\x1a\nfakebytes")
 

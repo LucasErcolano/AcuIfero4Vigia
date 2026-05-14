@@ -13,7 +13,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
+import cv2
 import httpx
+import numpy as np
 
 from acuifero_vigia.core.settings import get_settings
 
@@ -79,9 +81,26 @@ def _build_user_prompt() -> str:
     return "\n".join(parts)
 
 
-def _encode_image(path: Path) -> str:
-    with path.open("rb") as handle:
-        return base64.b64encode(handle.read()).decode("ascii")
+def _encode_image(path: Path, *, max_side: int, jpeg_quality: int = 82) -> str:
+    raw = path.read_bytes()
+    image = cv2.imdecode(np.frombuffer(raw, dtype=np.uint8), cv2.IMREAD_COLOR)
+    if image is None:
+        return base64.b64encode(raw).decode("ascii")
+
+    height, width = image.shape[:2]
+    longest_side = max(height, width)
+    if max_side > 0 and longest_side > max_side:
+        scale = max_side / float(longest_side)
+        image = cv2.resize(
+            image,
+            (max(1, int(width * scale)), max(1, int(height * scale))),
+            interpolation=cv2.INTER_AREA,
+        )
+
+    ok, encoded = cv2.imencode(".jpg", image, [int(cv2.IMWRITE_JPEG_QUALITY), jpeg_quality])
+    if not ok:
+        return base64.b64encode(raw).decode("ascii")
+    return base64.b64encode(encoded.tobytes()).decode("ascii")
 
 
 def _parse_json_block(text: str) -> dict | None:
@@ -98,10 +117,10 @@ def _parse_json_block(text: str) -> dict | None:
 
 
 class GemmaImageAssessmentAdapter:
-    """Calls Gemma through Ollama's `/api/chat` with inline base64 images.
+    """Calls Gemma through Ollama's `/api/chat` with one optimized image.
 
-    Tries the configured model (typically E4B). On network failure or invalid
-    output it logs and returns None; callers persist a degraded placeholder.
+    The Raspberry Pi profile uses this as an occasional verifier, not as the
+    always-on visual detector. OpenCV does the continuous frame processing.
     """
 
     def __init__(self) -> None:
@@ -109,17 +128,17 @@ class GemmaImageAssessmentAdapter:
 
     @property
     def model_name(self) -> str:
-        return self.settings.llm_model
+        return self.settings.acuifero_multimodal_model
 
     def assess(self, image_path: str | Path) -> ImageAssessmentResult | None:
-        if not self.settings.llm_enabled or not self.settings.acuifero_multimodal_enabled:
+        if not self.settings.llm_enabled or not self.settings.acuifero_multimodal_verifier_enabled:
             return None
         path = Path(image_path)
         if not path.exists():
             return None
 
-        encoded = _encode_image(path)
-        primary = self.settings.llm_model
+        encoded = _encode_image(path, max_side=self.settings.acuifero_multimodal_image_max_side)
+        primary = self.settings.acuifero_multimodal_model
         fallback = "gemma4:e2b" if primary != "gemma4:e2b" else None
 
         result = self._call_model(primary, encoded)
@@ -128,7 +147,7 @@ class GemmaImageAssessmentAdapter:
         return result
 
     def _ollama_chat_url(self) -> str:
-        return self.settings.llm_base_url.rstrip("/").removesuffix("/v1") + "/api/chat"
+        return self.settings.acuifero_multimodal_base_url.rstrip("/").removesuffix("/v1") + "/api/chat"
 
     def _call_model(self, model_name: str, encoded_image: str) -> ImageAssessmentResult | None:
         payload = {
@@ -143,10 +162,14 @@ class GemmaImageAssessmentAdapter:
                     "images": [encoded_image],
                 },
             ],
-            "options": {"temperature": 0.1, "num_predict": 256},
+            "options": {
+                "temperature": 0.1,
+                "num_ctx": self.settings.acuifero_multimodal_num_ctx,
+                "num_predict": self.settings.acuifero_multimodal_num_predict,
+            },
         }
         try:
-            with httpx.Client(timeout=self.settings.llm_timeout_seconds) as client:
+            with httpx.Client(timeout=self.settings.acuifero_multimodal_timeout_seconds) as client:
                 response = client.post(self._ollama_chat_url(), json=payload)
                 response.raise_for_status()
             body = response.json()
