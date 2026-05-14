@@ -30,10 +30,13 @@ translation. We do *not* claim live SINAGIR API integration.
 | `score` (0.0–1.0) | `evento.severidad.indice` | Numeric auxiliary, not in current SINAME but allowed as metadata |
 | `trigger_source` (node/volunteer/hydromet/fused) | `evento.origen` | |
 | `summary` | `evento.resumen` | |
-| `decision_trace` (list[str]) | `evento.explicacion` | Our trace is already a list of rule firings |
+| `decision_trace.rules_fired` | `evento.explicacion` | Backward-compatible export keeps this as `explanation: list[str]` |
+| `decision_trace` (structured JSON) | `evento.trazabilidad` | Includes window, evidence IDs, weights, rules, and source payload summaries |
+| `incident_id` | `evento.incidente.id` | Operational continuity across recomputes |
 | `reasoning_summary` + `reasoning_chain` | `evento.justificacion` | SINAGIR does not mandate a structure for explanation; we expose as sub-object |
 | `reasoning_model` | `evento.fuente_ai` | Metadata only; SINAGIR does not yet standardize AI provenance |
 | `local_alarm_triggered` | `evento.actuacion_local` | Boolean |
+| `ActuationRecord[]` | `evento.actuacion_local.records` | Siren/radio/app attempts, status, errors, timestamps |
 | hazard type | `evento.tipo` = `"inundacion"` | Hardcoded for this MVP |
 
 ## What is compatible today
@@ -42,8 +45,10 @@ translation. We do *not* claim live SINAGIR API integration.
   color-coded severity.
 - Coordinate system (WGS84 dd) matches SINAME's expected input.
 - Timestamps are timezone-aware ISO-8601.
-- Event payload carries a human-readable explanation (`decision_trace` +
-  `reasoning_summary`), a SINAGIR requirement for auditable alerts.
+- Event payload carries a human-readable explanation (`explanation` +
+  `reasoning_summary`) and structured trace (`decision_trace`) for audit.
+- Incident and actuation records are exported alongside the alert so the payload
+  can show both the decision and the operational response.
 
 ## What requires future work
 
@@ -81,13 +86,23 @@ Response (example from a red alert on `silverado-fixed-cam-usgs`):
     "severity": {"level": "red", "score": 0.98},
     "trigger_source": "volunteer",
     "summary": "Volunteer report: water=critical, trend=rising, road=blocked",
-    "explanation": ["volunteer=0.98", "supporting_sources=1"],
+    "explanation": ["volunteer_mark_exceeded", "volunteer_road_cut"],
+    "decision_trace": {
+      "schema": "decision-trace-v2",
+      "window": {"minutes": 45},
+      "rules_fired": ["volunteer_mark_exceeded", "volunteer_road_cut"],
+      "evidence": [{"source": "volunteer", "entity_id": 12, "weighted_score": 0.92}]
+    },
     "reasoning": {
       "summary": "Alerta roja: el reporte voluntario confirma agua critica...",
       "chain": ["paso la marca critica", "ruta cortada", "escalar"],
       "model": "gemma4:e2b"
     },
-    "local_actuation": {"siren_triggered": true},
+    "local_actuation": {
+      "siren_triggered": true,
+      "records": [{"actuator_type": "trigger_alarm", "status": "success"}]
+    },
+    "incident": {"id": 3, "state": "escalated", "current_level": "red"},
     "origin_system": "Acuifero 4 + Vigia (edge)"
   }
 }

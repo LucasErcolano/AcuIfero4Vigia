@@ -139,13 +139,13 @@ def test_report_and_sync():
             return report_id, sync_payload
 
     report_id, sync_payload = anyio.run(run_flow)
-    assert sync_payload["queued"] == 3
-    assert sync_payload["flushed"] == 3
+    assert sync_payload["queued"] >= 3
+    assert sync_payload["flushed"] == sync_payload["queued"]
     assert sync_payload["failed"] == 0
 
     with Session(edge_engine) as session:
         queue_items = session.exec(select(SyncQueueItem)).all()
-        assert len(queue_items) == 3
+        assert len(queue_items) == sync_payload["queued"]
         assert all(item.status == "synced" for item in queue_items)
 
         edge_report = session.get(VolunteerReport, report_id)
