@@ -34,7 +34,7 @@ def _build_test_video(path: Path) -> None:
 
     for index in range(16):
         frame = np.full((height, width, 3), (200, 210, 220), dtype=np.uint8)
-        waterline_y = max(70, 210 - index * 9)
+        waterline_y = max(60, 210 - index * 10)
         cv2.rectangle(frame, (0, waterline_y), (width - 1, height - 1), (90, 70, 40), -1)
         cv2.line(frame, (0, 100), (width - 1, 100), (245, 245, 245), 2)
         writer.write(frame)

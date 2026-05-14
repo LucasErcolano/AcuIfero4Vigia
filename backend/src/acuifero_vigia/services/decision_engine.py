@@ -13,6 +13,7 @@ from acuifero_vigia.models.domain import (
     ParsedObservation,
     VolunteerReport,
 )
+from acuifero_vigia.services.actuators import dispatch_actuators
 from acuifero_vigia.services.reasoning import generate_alert_reasoning, serialize_chain
 
 
@@ -146,17 +147,26 @@ def recompute_site_alert(
         llm=llm if level != "green" else None,
     )
 
+    trace_entries = list(rules_fired)
+
     alert = FusedAlert(
         site_id=site_id,
         level=level,
         score=round(weighted_score, 4),
         trigger_source=max_source,
         summary=" | ".join(summary_parts[:3]),
-        decision_trace=json.dumps(rules_fired),
+        decision_trace=json.dumps(trace_entries),
         local_alarm_triggered=local_alarm_triggered,
         reasoning_summary=reasoning.llm_summary,
         reasoning_chain=serialize_chain(reasoning.llm_chain_of_thought),
         reasoning_model=reasoning.model_name,
     )
+
+    if local_alarm_triggered and llm is not None:
+        fired = dispatch_actuators(alert, llm)
+        if fired:
+            trace_entries.append("actuated: " + ", ".join(fired))
+            alert.decision_trace = json.dumps(trace_entries)
+
     session.add(alert)
     return alert

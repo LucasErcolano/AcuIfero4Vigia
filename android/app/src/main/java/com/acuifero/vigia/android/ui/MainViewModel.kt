@@ -4,17 +4,22 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.acuifero.vigia.android.AcuiferoApplication
 import com.acuifero.vigia.android.data.AcuiferoRepository
 import com.acuifero.vigia.android.data.AlertSummary
 import com.acuifero.vigia.android.data.CalibrationPayload
 import com.acuifero.vigia.android.data.CalibrationResponse
 import com.acuifero.vigia.android.data.ExternalSnapshot
+import com.acuifero.vigia.android.data.GemmaOnDevice
+import com.acuifero.vigia.android.data.LocalParsedObservation
 import com.acuifero.vigia.android.data.NodeAnalysisResponse
 import com.acuifero.vigia.android.data.PendingReportEntity
 import com.acuifero.vigia.android.data.ReportEnvelope
 import com.acuifero.vigia.android.data.RuntimeStatus
 import com.acuifero.vigia.android.data.SiteDetail
 import com.acuifero.vigia.android.data.SiteSummary
+import com.acuifero.vigia.android.data.VolunteerReport
+import com.google.gson.Gson
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -44,6 +49,7 @@ data class SiteScreenState(
 
 class MainViewModel(
     private val repository: AcuiferoRepository,
+    private val gemma: GemmaOnDevice? = null,
 ) : ViewModel() {
     private val _dashboard = MutableStateFlow(DashboardState(isLoading = true))
     val dashboard: StateFlow<DashboardState> = _dashboard.asStateFlow()
@@ -122,6 +128,60 @@ class MainViewModel(
     fun submitReport(siteId: String, reporterName: String, reporterRole: String, transcriptText: String, forceOffline: Boolean) {
         viewModelScope.launch {
             _siteState.value = _siteState.value.copy(isSubmitting = true, message = null, error = null)
+            // On-device Gemma fast path: when a model file is present we structure
+            // the transcript locally and surface the result without hitting the
+            // backend. Queue flushing remains a separate user action.
+            val gemmaInstance = gemma
+            if (gemmaInstance != null && gemmaInstance.isAvailable()) {
+                runCatching {
+                    val rawJson = gemmaInstance.structureReport(transcriptText)
+                    if (rawJson.isNullOrBlank()) {
+                        null
+                    } else {
+                        Gson().fromJson(rawJson, LocalParsedObservation::class.java)
+                            ?.toParsedObservation()
+                    }
+                }.onSuccess { parsed ->
+                    if (parsed == null) {
+                        _siteState.value = _siteState.value.copy(
+                            isSubmitting = false,
+                            error = "Gemma local no disponible — usá conexión a servidor.",
+                        )
+                    } else {
+                        val envelope = ReportEnvelope(
+                            report = VolunteerReport(
+                                id = 0L,
+                                siteId = siteId,
+                                reporterName = reporterName,
+                                reporterRole = reporterRole,
+                                transcriptText = transcriptText,
+                                offlineCreated = true,
+                                createdAt = "",
+                            ),
+                            parsed = parsed.copy(parserSource = "gemma-android"),
+                            alert = AlertSummary(
+                                id = 0L,
+                                siteId = siteId,
+                                level = parsed.urgency,
+                                score = parsed.confidence,
+                                summary = parsed.summary,
+                                createdAt = "",
+                            ),
+                        )
+                        _siteState.value = _siteState.value.copy(
+                            isSubmitting = false,
+                            reportResult = envelope,
+                            message = "Reporte estructurado localmente con Gemma.",
+                        )
+                    }
+                }.onFailure { error ->
+                    _siteState.value = _siteState.value.copy(
+                        isSubmitting = false,
+                        error = "Gemma local no disponible — usá conexión a servidor.",
+                    )
+                }
+                return@launch
+            }
             runCatching {
                 repository.submitOrQueueReport(siteId, reporterName, reporterRole, transcriptText, forceOffline)
             }.onSuccess { envelope ->
@@ -184,8 +244,10 @@ class MainViewModel(
 
 class MainViewModelFactory(context: Context) : ViewModelProvider.Factory {
     private val repository = AcuiferoRepository.get(context)
+    private val gemma: GemmaOnDevice? = (context.applicationContext as? AcuiferoApplication)?.gemma
 
+    @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
-        return MainViewModel(repository) as T
+        return MainViewModel(repository, gemma) as T
     }
 }

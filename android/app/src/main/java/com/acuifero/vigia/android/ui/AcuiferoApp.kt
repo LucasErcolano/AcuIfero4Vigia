@@ -63,6 +63,7 @@ import coil.compose.AsyncImage
 import com.acuifero.vigia.android.data.AlertSummary
 import com.acuifero.vigia.android.data.CalibrationPayload
 import com.acuifero.vigia.android.data.PendingReportEntity
+import com.google.gson.Gson
 
 private val Emerald = Color(0xFF0D3B2A)
 private val River = Color(0xFF1476B8)
@@ -279,10 +280,13 @@ private fun ReasoningPanel(alert: AlertSummary) {
             Text(summary, style = MaterialTheme.typography.bodySmall)
             val chain = alert.reasoningChain
             if (!chain.isNullOrBlank()) {
-                Text(
-                    chain.trim('[', ']').replace("\"", ""),
-                    style = MaterialTheme.typography.bodySmall,
-                )
+                val parsedChain: String = try {
+                    val items = Gson().fromJson(chain, Array<String>::class.java) ?: emptyArray()
+                    items.joinToString(" → ")
+                } catch (_: Exception) {
+                    chain.trim('[', ']').replace("\"", "")
+                }
+                Text(parsedChain, style = MaterialTheme.typography.bodySmall)
             }
         }
     }
@@ -361,6 +365,13 @@ private fun SiteDetailScreen(
                     Text(if (state.isSubmitting) "Submitting..." else "Send report")
                 }
                 state.reportResult?.let { result ->
+                    val parserLabel = when (result.parsed.parserSource) {
+                        "gemma-android" -> "Analizado con Gemma en este dispositivo"
+                        "llm" -> "Analizado por Gemma en el servidor"
+                        "rules" -> "Estructurado por reglas locales"
+                        else -> "Origen: ${result.parsed.parserSource}"
+                    }
+                    AssistChip(onClick = {}, label = { Text(parserLabel) })
                     Text("parser=${result.parsed.parserSource} | urgency=${result.parsed.urgency} | water=${result.parsed.waterLevelCategory}")
                     Text(result.alert.summary)
                 }

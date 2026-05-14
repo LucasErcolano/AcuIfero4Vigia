@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
+from typing import Iterator
+
 from sqlalchemy import inspect
 from sqlalchemy.engine import Engine
 from sqlmodel import SQLModel, Session, create_engine
@@ -38,6 +41,17 @@ def init_db() -> None:
 def get_session():
     with Session(edge_engine) as session:
         yield session
+
+
+@contextmanager
+def session_scope() -> Iterator[Session]:
+    """Standalone edge-DB session for use outside the FastAPI request scope
+    (background tasks, scripts). The caller is responsible for ``.commit()``."""
+    session = Session(edge_engine)
+    try:
+        yield session
+    finally:
+        session.close()
 
 
 
