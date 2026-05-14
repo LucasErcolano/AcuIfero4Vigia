@@ -13,12 +13,14 @@ from acuifero_vigia.services.acuifero_assessment import AssessmentVerdict, Tempo
 
 
 SYSTEM_PROMPT = (
-    "Sos Acuifero, un motor de evaluacion temporal de crecidas sobre camaras fijas. "
-    "Recibis una secuencia ordenada de frames con metadatos de tiempo y pistas numericas no semanticas. "
-    "Tu tarea es decidir el riesgo principal del nodo fijo de forma auditable, priorizando lo que se ve en la secuencia. "
+    "Sos Acuifero, un motor multimodal de evaluacion de crecidas sobre camaras fijas. "
+    "Recibis una o mas imagenes ordenadas en el tiempo. No hay OpenCV ni pistas numericas visuales: "
+    "tu tarea es interpretar directamente las imagenes con Gemma 4 y decidir el riesgo principal del nodo fijo. "
     "Responde SOLO un JSON con estas claves exactas: assessment_level (green|yellow|orange|red), "
     "assessment_score (0.0 a 1.0), temporal_summary (1 o 2 oraciones), reasoning_summary (2 o 3 oraciones), "
-    "reasoning_steps (lista corta), critical_evidence (objeto JSON). No markdown, no texto extra."
+    "reasoning_steps (lista corta), critical_evidence (objeto JSON). critical_evidence debe incluir cuando sea posible "
+    "waterline_ratio (0.0 a 1.0), crossed_critical_line (true/false), rise_velocity (numero), confidence (0.0 a 1.0), "
+    "visual_cues (lista corta). No markdown, no texto extra."
 )
 
 
@@ -94,11 +96,9 @@ class OllamaGemmaRunner:
         if not self.settings.llm_enabled:
             return None
 
-        if self.settings.acuifero_multimodal_enabled:
-            verdict = self._assess_multimodal(pack)
-            if verdict is not None:
-                return verdict
-        return self._assess_text(pack)
+        if not self.settings.acuifero_multimodal_enabled:
+            return None
+        return self._assess_multimodal(pack)
 
     def _assess_multimodal(self, pack: TemporalEvidencePack) -> AssessmentVerdict | None:
         encoded_images = []
@@ -150,19 +150,6 @@ class OllamaGemmaRunner:
     def _multimodal_ollama_chat_url(self) -> str:
         return self.settings.acuifero_multimodal_base_url.rstrip("/").removesuffix("/v1") + "/api/chat"
 
-    def _assess_text(self, pack: TemporalEvidencePack) -> AssessmentVerdict | None:
-        raw = self.llm.generate_text(SYSTEM_PROMPT, self._build_user_prompt(pack), max_tokens=420)
-        if not raw:
-            return None
-        parsed = self.llm._extract_json(raw)
-        if not isinstance(parsed, dict):
-            return None
-        return _normalize_verdict_payload(
-            parsed,
-            runner_name=self.settings.llm_model,
-            runner_mode="text-only-temporal",
-        )
-
     @staticmethod
     def _build_user_prompt(pack: TemporalEvidencePack) -> str:
         frame_lines = []
@@ -172,12 +159,8 @@ class OllamaGemmaRunner:
                     [
                         f"frame_{index}",
                         f"t={frame.timestamp_s:.1f}s",
-                        f"ratio_hint={frame.waterline_ratio_hint:.2f}",
-                        f"motion={frame.motion_score:.3f}",
-                        f"edge={frame.edge_strength:.3f}",
-                        f"brightness={frame.brightness:.1f}",
-                        f"contrast={frame.contrast:.1f}",
-                    ]
+                "visual_source=gemma4_image",
+            ]
                 )
             )
         return "\n".join(
@@ -189,8 +172,9 @@ class OllamaGemmaRunner:
                 "Frames curados en orden temporal:",
                 *frame_lines,
                 (
-                    "Decidi el riesgo principal observando la progresion temporal del agua. "
-                    "Distingui subida real de ruido visual y explicalo de forma auditable."
+                    "Decidi el riesgo principal mirando directamente las imagenes. "
+                    "Si hay una sola imagen, estima el estado actual y marca baja confianza para tendencia temporal. "
+                    "Si hay varias, compara progresion, linea de agua, estructuras de referencia, turbidez, obstrucciones y reflejos."
                 ),
             ]
         )

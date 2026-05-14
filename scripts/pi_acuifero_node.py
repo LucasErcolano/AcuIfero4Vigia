@@ -45,7 +45,8 @@ def _post_multipart(url: str, fields: dict[str, str], files: dict[str, Path], ti
         filename = path.name
         add_line(f"--{boundary}")
         add_line(f'Content-Disposition: form-data; name="{name}"; filename="{filename}"')
-        add_line("Content-Type: video/x-msvideo")
+        content_type = "image/jpeg" if path.suffix.lower() in {".jpg", ".jpeg"} else "video/x-msvideo"
+        add_line(f"Content-Type: {content_type}")
         add_line()
         body.extend(path.read_bytes())
         body.extend(b"\r\n")
@@ -62,36 +63,17 @@ def _post_multipart(url: str, fields: dict[str, str], files: dict[str, Path], ti
         return json.loads(response.read().decode("utf-8"))
 
 
-def _build_synthetic_clip(path: Path, width: int, height: int, fps: float, duration_s: float) -> None:
-    import cv2
-    import numpy as np
+def _build_synthetic_clip(path: Path, width: int, height: int, _fps: float, _duration_s: float) -> None:
+    from PIL import Image, ImageDraw
 
-    frame_count = max(int(duration_s * fps), 8)
-    writer = cv2.VideoWriter(str(path), cv2.VideoWriter_fourcc(*"MJPG"), fps, (width, height))
-    if not writer.isOpened():
-        raise RuntimeError(f"Could not create synthetic clip at {path}")
-
-    for index in range(frame_count):
-        progress = index / max(frame_count - 1, 1)
-        frame = np.full((height, width, 3), (190, 205, 215), dtype=np.uint8)
-        waterline_y = int(height * (0.78 - 0.45 * progress))
-        waterline_y = max(int(height * 0.20), min(height - 1, waterline_y))
-        cv2.rectangle(frame, (0, waterline_y), (width - 1, height - 1), (75, 65, 45), -1)
-        cv2.line(frame, (0, int(height * 0.36)), (width - 1, int(height * 0.36)), (245, 245, 245), 2)
-        cv2.line(frame, (0, int(height * 0.62)), (width - 1, int(height * 0.62)), (70, 180, 70), 2)
-        cv2.putText(
-            frame,
-            f"synthetic acuifero t={index / fps:.1f}s",
-            (14, 28),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.7,
-            (30, 30, 30),
-            2,
-            cv2.LINE_AA,
-        )
-        writer.write(frame)
-
-    writer.release()
+    image = Image.new("RGB", (width, height), (190, 205, 215))
+    draw = ImageDraw.Draw(image)
+    waterline_y = int(height * 0.42)
+    draw.rectangle((0, waterline_y, width - 1, height - 1), fill=(75, 65, 45))
+    draw.line((0, int(height * 0.36), width - 1, int(height * 0.36)), fill=(245, 245, 245), width=2)
+    draw.line((0, int(height * 0.62), width - 1, int(height * 0.62)), fill=(70, 180, 70), width=2)
+    draw.text((14, 14), "synthetic acuifero multimodal frame", fill=(30, 30, 30))
+    image.save(path, format="JPEG", quality=88)
 
 
 def _capture_clip(path: Path, args: argparse.Namespace) -> None:
@@ -175,7 +157,7 @@ def _print_analysis_summary(result: dict[str, Any]) -> None:
 
 
 def _default_output_path(synthetic: bool) -> Path:
-    suffix = "synthetic.avi" if synthetic else "camera.avi"
+    suffix = "synthetic.jpg" if synthetic else "camera.avi"
     return Path(tempfile.gettempdir()) / f"acuifero-{int(time.time())}-{suffix}"
 
 

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import urllib.request
+import shutil
+import subprocess
 from pathlib import Path
-
-import cv2
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 MEDIA_DIR = PROJECT_ROOT / 'fixtures' / 'media'
@@ -31,22 +31,30 @@ def download_video() -> None:
 
 def extract_reference_frames() -> None:
     FRAME_DIR.mkdir(parents=True, exist_ok=True)
-    capture = cv2.VideoCapture(str(VIDEO_PATH))
-    if not capture.isOpened():
-        raise RuntimeError(f'Could not open {VIDEO_PATH}')
+    ffmpeg = shutil.which('ffmpeg')
+    if ffmpeg is None:
+        raise RuntimeError('ffmpeg is required to extract reference frames')
 
-    fps = capture.get(cv2.CAP_PROP_FPS) or 30.0
     for second in FRAME_SECONDS:
-        frame_index = int(second * fps)
-        capture.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
-        ok, frame = capture.read()
-        if not ok:
-            raise RuntimeError(f'Could not decode frame at {second}s from {VIDEO_PATH}')
         output_path = FRAME_DIR / f'silverado_{second:03d}s.jpg'
-        cv2.imwrite(str(output_path), frame)
+        command = [
+            ffmpeg,
+            '-hide_banner',
+            '-loglevel',
+            'error',
+            '-y',
+            '-ss',
+            str(second),
+            '-i',
+            str(VIDEO_PATH),
+            '-frames:v',
+            '1',
+            '-q:v',
+            '3',
+            str(output_path),
+        ]
+        subprocess.run(command, check=True)
         print(f'Wrote {output_path}')
-
-    capture.release()
 
 
 if __name__ == '__main__':

@@ -22,6 +22,8 @@ interface RuntimeStatus {
     multimodal_score_threshold: number;
     multimodal_confidence_threshold: number;
     multimodal_image_max_side: number;
+    multimodal_max_frames: number;
+    multimodal_frame_sample_seconds: number;
     multimodal_num_ctx: number;
     multimodal_timeout_seconds: number;
     max_curated_frames: number;
@@ -110,48 +112,48 @@ export default function Settings() {
       <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm space-y-4">
         <h3 className="font-semibold text-gray-900">Acuifero fixed-node setup</h3>
         <p className="text-sm text-gray-600">
-          The fixed Acuifero node targets Raspberry Pi 5 with 8 GB RAM, SSD-backed local data, a compact text-first Gemma guard,
-          and an occasional Gemma 4 multimodal verifier over one curated frame.
+          The fixed Acuifero node now runs Gemma 4 multimodal as the visual decision path. The Pi 8 profile is a minimum demo
+          with one small frame every few minutes; the Pi 16/prod profile uses more frames and context.
           Vigia is a separate volunteer/user node.
         </p>
         {runtime?.acuifero && (
           <div className="grid gap-3 text-sm text-gray-700 sm:grid-cols-2">
             <div><span className="text-gray-500">Node profile:</span> {runtime.acuifero.node_profile}</div>
             <div className="break-all"><span className="text-gray-500">Data dir:</span> {runtime.acuifero.data_dir}</div>
-            <div><span className="text-gray-500">Primary multimodal:</span> {runtime.acuifero.multimodal_enabled ? 'Enabled' : 'Disabled'}</div>
-            <div><span className="text-gray-500">Verifier:</span> {runtime.acuifero.multimodal_verifier_enabled ? 'Enabled' : 'Disabled'}</div>
-            <div className="break-all"><span className="text-gray-500">Verifier URL:</span> {runtime.acuifero.multimodal_base_url}</div>
-            <div><span className="text-gray-500">Verifier model:</span> {runtime.acuifero.multimodal_model}</div>
-            <div><span className="text-gray-500">Verifier cadence:</span> {runtime.acuifero.multimodal_min_interval_seconds}s</div>
-            <div><span className="text-gray-500">Verifier score trigger:</span> {runtime.acuifero.multimodal_score_threshold.toFixed(2)}</div>
-            <div><span className="text-gray-500">Verifier confidence trigger:</span> {runtime.acuifero.multimodal_confidence_threshold.toFixed(2)}</div>
-            <div><span className="text-gray-500">Verifier image max side:</span> {runtime.acuifero.multimodal_image_max_side}px</div>
-            <div><span className="text-gray-500">Verifier context:</span> {runtime.acuifero.multimodal_num_ctx} tokens</div>
+            <div><span className="text-gray-500">Gemma multimodal:</span> {runtime.acuifero.multimodal_enabled ? 'Enabled' : 'Disabled'}</div>
+            <div className="break-all"><span className="text-gray-500">Multimodal URL:</span> {runtime.acuifero.multimodal_base_url}</div>
+            <div><span className="text-gray-500">Multimodal model:</span> {runtime.acuifero.multimodal_model}</div>
+            <div><span className="text-gray-500">Frames per analysis:</span> {runtime.acuifero.multimodal_max_frames}</div>
+            <div><span className="text-gray-500">Frame sample spacing:</span> {runtime.acuifero.multimodal_frame_sample_seconds}s</div>
+            <div><span className="text-gray-500">Image max side:</span> {runtime.acuifero.multimodal_image_max_side}px</div>
+            <div><span className="text-gray-500">Context:</span> {runtime.acuifero.multimodal_num_ctx} tokens</div>
+            <div><span className="text-gray-500">Timeout:</span> {runtime.acuifero.multimodal_timeout_seconds}s</div>
             <div><span className="text-gray-500">Curated frames:</span> {runtime.acuifero.max_curated_frames}</div>
             <div><span className="text-gray-500">Artifact retention:</span> {runtime.acuifero.artifact_retention_days} days</div>
           </div>
         )}
         <pre className="overflow-x-auto rounded-lg bg-gray-950 p-4 text-xs text-gray-100">
-{`ACUIFERO_NODE_PROFILE=raspberry-pi-8gb-hybrid
+{`ACUIFERO_NODE_PROFILE=raspberry-pi-8gb-multimodal-demo
 ACUIFERO_DATA_DIR=/mnt/acuifero/data
 ACUIFERO_LLM_ENABLED=true
 ACUIFERO_LLM_BASE_URL=http://127.0.0.1:11434/v1
 ACUIFERO_LLM_MODEL=gemma4:e2b
 ACUIFERO_LLM_API_KEY=ollama
-ACUIFERO_MULTIMODAL_ENABLED=false
-ACUIFERO_MULTIMODAL_VERIFIER_ENABLED=true
+ACUIFERO_MULTIMODAL_ENABLED=true
+ACUIFERO_MULTIMODAL_VERIFIER_ENABLED=false
 ACUIFERO_MULTIMODAL_BASE_URL=http://127.0.0.1:11434/v1
 ACUIFERO_MULTIMODAL_MODEL=gemma4:e2b
-ACUIFERO_MULTIMODAL_MIN_INTERVAL_SECONDS=300
-ACUIFERO_MULTIMODAL_IMAGE_MAX_SIDE=768
-ACUIFERO_MULTIMODAL_NUM_CTX=2048
-ACUIFERO_MULTIMODAL_TIMEOUT_SECONDS=180
-ACUIFERO_MAX_CURATED_FRAMES=3
-ACUIFERO_ARTIFACT_RETENTION_DAYS=7`}
+ACUIFERO_MULTIMODAL_MAX_FRAMES=1
+ACUIFERO_MULTIMODAL_FRAME_SAMPLE_SECONDS=300
+ACUIFERO_MULTIMODAL_IMAGE_MAX_SIDE=512
+ACUIFERO_MULTIMODAL_NUM_CTX=1024
+ACUIFERO_MULTIMODAL_TIMEOUT_SECONDS=300
+ACUIFERO_MAX_CURATED_FRAMES=1
+ACUIFERO_ARTIFACT_RETENTION_DAYS=3`}
         </pre>
         <p className="text-sm text-gray-600">
-          Use `./scripts/run_acuifero_pi8_hybrid.sh` from the repo root to start Ollama, pull the selected Gemma 4 model, seed the edge DB, and run the API.
-          If the local model is down, Acuifero keeps producing a deterministic fixed-node assessment from the temporal evidence builder.
+          Use `./scripts/run_acuifero_pi8_multimodal_demo.sh` for the Pi 8 demo or `./scripts/run_acuifero_pi16_multimodal_prod.sh` for the production profile.
+          If the local model is down, Acuifero records the prepared frames and returns a conservative manual-review fallback.
         </p>
       </section>
     </div>

@@ -24,15 +24,15 @@ The system has three real signal paths:
 - `Vigia`: volunteer field reports stored offline-first in the PWA
 - live hydrometeorological enrichment from Open-Meteo APIs
 
-The fixed `Acuifero` node is now sized for a Raspberry Pi 8 GB edge box with
-local storage. It uses OpenCV locally to curate compact temporal evidence, then
-asks a local OpenAI-compatible Gemma runtime for a text verdict over those
-numeric/temporal hints. `Vigia` remains a separate volunteer/user node.
+The fixed `Acuifero` node is now sized in two modes: a minimum Raspberry Pi 8 GB
+demo and a Raspberry Pi 16 GB / workstation production profile. Both use Gemma 4
+multimodal directly over curated frames; OpenCV is not part of the Acuifero
+visual decision path. `Vigia` remains a separate volunteer/user node.
 
 ## What is real in this repo
 
-- Node analysis samples fixed-camera video, curates a temporal evidence bundle, and asks Gemma to emit the node assessment package.
-- OpenCV still runs locally, but only for frame curation, ROI/band processing, overlays, and numeric hints passed into Gemma.
+- Node analysis samples fixed-camera video with ffmpeg, curates image evidence, and asks Gemma 4 multimodal to emit the node assessment package.
+- Acuifero does not use OpenCV for the fixed-node visual decision path; Gemma 4 reads the selected images directly.
 - Every node analysis persists an audit artifact pack with curated frames, evidence frame, temporal summary, runner metadata, fallback status, and JSON manifests.
 - Volunteer reports are parsed into structured observations with a local Gemma adapter and a deterministic fallback.
 - Fused alerts are recomputed from node, volunteer, and hydromet signals.
@@ -46,29 +46,32 @@ The current production target for the fixed-camera `Acuifero` node is:
 
 - Raspberry Pi 5, 8 GB RAM
 - Raspberry Pi OS 64-bit
+- system `ffmpeg` available for frame extraction
 - 128 GB or larger USB SSD/NVMe for `backend/data`
 - fixed camera input uploaded to the backend or bound as per-site sample media
 - local SQLite for `edge.db`, audit artifacts, and the sync queue
 
-The Raspberry Pi 8 GB hybrid profile is the deploy target:
+The Raspberry Pi 8 GB demo profile is the first deploy target:
 
 ```bash
-ACUIFERO_NODE_PROFILE=raspberry-pi-8gb-hybrid
+ACUIFERO_NODE_PROFILE=raspberry-pi-8gb-multimodal-demo
 ACUIFERO_DATA_DIR=/mnt/acuifero/data
-ACUIFERO_MAX_CURATED_FRAMES=3
-ACUIFERO_ARTIFACT_RETENTION_DAYS=7
-ACUIFERO_MULTIMODAL_ENABLED=false
-ACUIFERO_MULTIMODAL_VERIFIER_ENABLED=true
+ACUIFERO_MAX_CURATED_FRAMES=1
+ACUIFERO_ARTIFACT_RETENTION_DAYS=3
+ACUIFERO_MULTIMODAL_ENABLED=true
+ACUIFERO_MULTIMODAL_VERIFIER_ENABLED=false
 ACUIFERO_MULTIMODAL_BASE_URL=http://127.0.0.1:11434/v1
 ACUIFERO_MULTIMODAL_MODEL=gemma4:e2b
-ACUIFERO_MULTIMODAL_MIN_INTERVAL_SECONDS=300
+ACUIFERO_MULTIMODAL_MAX_FRAMES=1
+ACUIFERO_MULTIMODAL_FRAME_SAMPLE_SECONDS=300
+ACUIFERO_MULTIMODAL_IMAGE_MAX_SIDE=512
+ACUIFERO_MULTIMODAL_NUM_CTX=1024
 ```
 
-On this profile, OpenCV curates frames locally and the primary Gemma call is
-text-first over the temporal evidence pack. Inline multimodal frame prompting is
-disabled for the primary path to keep RAM and latency inside a Raspberry Pi 8 GB
-budget; a separate Gemma 4 verifier inspects one optimized evidence frame every
-five minutes or on critical events.
+On this profile, Acuifero extracts one optimized frame from each short clip and
+asks Gemma 4 multimodal for the verdict. It is intentionally sparse so we can
+learn the real latency and memory ceiling of the 8 GB Pi without changing the
+production code path.
 
 `Vigia` is intentionally out of this hardware profile: volunteer reports and
 phone/user-side operation are treated as a separate node/application.
@@ -98,23 +101,31 @@ ACUIFERO_LLM_MODEL=gemma4:e2b
 ACUIFERO_LLM_API_KEY=ollama
 ```
 
-Practical recommendation for the Raspberry Pi 8 GB Acuifero node:
+Practical recommendation for the Raspberry Pi 8 GB demo:
 
 - start with `gemma4:e2b`
-- keep `ACUIFERO_MULTIMODAL_ENABLED=false` for the primary text-only guard
-- enable `ACUIFERO_MULTIMODAL_VERIFIER_ENABLED=true` for one-frame Gemma 4 checks
-- keep `ACUIFERO_MAX_CURATED_FRAMES=3`
+- keep `ACUIFERO_MULTIMODAL_ENABLED=true`
+- keep `ACUIFERO_MULTIMODAL_MAX_FRAMES=1`
+- keep `ACUIFERO_MULTIMODAL_IMAGE_MAX_SIDE=512`
+- use `ACUIFERO_GUARD_INTERVAL_SECONDS=300` for a frame/clip every five minutes
 - store `ACUIFERO_DATA_DIR` on SSD/NVMe, not on the boot microSD
 
-On Raspberry Pi, OpenCV is the continuous visual worker. Gemma 4 text-only
-reasons over compact evidence, and Gemma 4 multimodal only verifies an optimized
-evidence frame every five minutes or on critical-line events. On bigger x86/GPU
-nodes, you can raise curated frames and enable primary multimodal prompting.
+For the Raspberry Pi 16 GB / workstation production profile, use
+`scripts/run_acuifero_pi16_multimodal_prod.sh`; it raises frames, image size,
+context, timeout, retention, and analysis cadence while keeping the same
+Gemma-first multimodal code path.
+
+On Raspberry Pi OS, install the system video dependency first:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y ffmpeg
+```
 
 Install and start the local runtime from the repo root:
 
 ```bash
-./scripts/run_acuifero_pi8_hybrid.sh
+./scripts/run_acuifero_pi8_multimodal_demo.sh
 ```
 
 Run the fixed-camera guard loop from another terminal on the Pi:
@@ -122,9 +133,9 @@ Run the fixed-camera guard loop from another terminal on the Pi:
 ```bash
 cd backend
 source .venv/bin/activate
-ACUIFERO_CAMERA_SOURCE=0 \
+ACUIFERO_CAMERA_SOURCE=/dev/video0 \
 ACUIFERO_GUARD_SITE_ID=silverado-fixed-cam-usgs \
-ACUIFERO_GUARD_INTERVAL_SECONDS=60 \
+ACUIFERO_GUARD_INTERVAL_SECONDS=300 \
 ACUIFERO_GUARD_CLIP_SECONDS=12 \
 PYTHONPATH=src python3 ../scripts/node_guard.py
 ```
@@ -273,7 +284,7 @@ curl -sf -X POST http://127.0.0.1:8000/api/reports \
 
 Expected on a healthy setup:
 
-- `/api/settings/runtime` returns `llm.reachable=true`, `model=gemma4:e2b`, `acuifero.node_profile=raspberry-pi-8gb-hybrid`, and `acuifero.multimodal_verifier_enabled=true`
+- `/api/settings/runtime` returns `llm.reachable=true`, `model=gemma4:e2b`, `acuifero.node_profile=raspberry-pi-8gb-multimodal-demo`, and `acuifero.multimodal_enabled=true`
 - sample-node analysis returns `frames_analyzed=126`, `assessment_mode=temporal-gemma-v1`, and `alert_level=red` for the bundled USGS clip
 - report submission returns `200 OK` and creates a fused red alert for the sample site
 
