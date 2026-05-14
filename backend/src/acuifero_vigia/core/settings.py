@@ -6,7 +6,6 @@ from functools import lru_cache
 from pathlib import Path
 
 
-
 def _as_bool(name: str, default: bool) -> bool:
     raw = os.environ.get(name)
     if raw is None:
@@ -46,6 +45,13 @@ class Settings:
     hydromet_timeout_seconds: float
     acuifero_max_curated_frames: int
     acuifero_artifact_retention_days: int
+    asr_enabled: bool
+    asr_model_size: str
+    asr_model_cache_dir: Path
+    vigia_image_enabled: bool
+    image_max_tokens: int
+    image_timeout_seconds: float
+    actuators_enabled: bool
 
 
 @lru_cache(maxsize=1)
@@ -72,6 +78,10 @@ def get_settings() -> Settings:
 
     edge_db_path = Path(os.environ.get("ACUIFERO_EDGE_DB_PATH", str(data_dir / "edge.db")))
     central_db_path = Path(os.environ.get("ACUIFERO_CENTRAL_DB_PATH", str(data_dir / "central.db")))
+    asr_model_cache_dir = Path(
+        os.environ.get("ACUIFERO_ASR_MODEL_CACHE_DIR", str(data_dir / "whisper-models"))
+    )
+    acuifero_multimodal_enabled_default = _as_bool("ACUIFERO_MULTIMODAL_ENABLED", not is_raspberry_profile)
 
     return Settings(
         acuifero_node_profile=acuifero_node_profile,
@@ -87,7 +97,7 @@ def get_settings() -> Settings:
         llm_model=os.environ.get("ACUIFERO_LLM_MODEL", "gemma4:e2b"),
         llm_api_key=os.environ.get("ACUIFERO_LLM_API_KEY", "ollama"),
         llm_timeout_seconds=float(os.environ.get("ACUIFERO_LLM_TIMEOUT_SECONDS", "30")),
-        acuifero_multimodal_enabled=_as_bool("ACUIFERO_MULTIMODAL_ENABLED", True),
+        acuifero_multimodal_enabled=acuifero_multimodal_enabled_default,
         acuifero_multimodal_verifier_enabled=_as_bool(
             "ACUIFERO_MULTIMODAL_VERIFIER_ENABLED",
             False,
@@ -141,4 +151,11 @@ def get_settings() -> Settings:
                 "3" if is_pi8_demo_profile else "14",
             )
         ),
+        asr_enabled=_as_bool("ACUIFERO_ASR_ENABLED", True),
+        asr_model_size=os.environ.get("ACUIFERO_ASR_MODEL_SIZE", "tiny"),
+        asr_model_cache_dir=asr_model_cache_dir,
+        vigia_image_enabled=_as_bool("ACUIFERO_VIGIA_IMAGE_ENABLED", acuifero_multimodal_enabled_default),
+        image_max_tokens=int(os.environ.get("ACUIFERO_IMAGE_MAX_TOKENS", "256")),
+        image_timeout_seconds=float(os.environ.get("ACUIFERO_IMAGE_TIMEOUT_SECONDS", "300")),
+        actuators_enabled=_as_bool("ACUIFERO_ACTUATORS_ENABLED", True),
     )

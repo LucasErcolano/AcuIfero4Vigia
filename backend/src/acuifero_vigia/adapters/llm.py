@@ -110,6 +110,9 @@ class OpenAICompatibleLLM:
                         json={
                             "model": self.settings.llm_model,
                             "stream": False,
+                            # Gemma 4 routes output into message.thinking by default;
+                            # disable so message.content is populated directly.
+                            "think": False,
                             "messages": [
                                 {"role": "system", "content": system_prompt},
                                 {"role": "user", "content": user_prompt},
@@ -161,6 +164,9 @@ class OpenAICompatibleLLM:
             "model": self.settings.llm_model,
             "stream": False,
             "format": "json",
+            # Gemma 4 routes output into message.thinking by default;
+            # disable so message.content holds the JSON we asked for.
+            "think": False,
             "messages": [
                 {
                     "role": "system",
@@ -174,6 +180,7 @@ class OpenAICompatibleLLM:
                     "content": prompt,
                 },
             ],
+            "options": {"num_predict": 320},
         }
         try:
             with httpx.Client(timeout=self.settings.llm_timeout_seconds) as client:

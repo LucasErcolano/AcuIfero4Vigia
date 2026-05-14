@@ -7,7 +7,7 @@ from pathlib import Path
 import anyio
 import httpx
 import pytest
-from fastapi import UploadFile
+from fastapi import BackgroundTasks, UploadFile
 from PIL import Image, ImageDraw
 from sqlmodel import Session, SQLModel, select
 
@@ -111,6 +111,7 @@ def test_report_and_sync():
     async def run_flow():
         with Session(edge_engine) as edge_session:
             payload = await create_report(
+                background_tasks=BackgroundTasks(),
                 site_id="test-site",
                 reporter_name="Test User",
                 reporter_role="Tester",
@@ -158,6 +159,7 @@ def test_report_uploads_are_persisted():
         audio = UploadFile(filename="note.wav", file=BytesIO(b"fake-audio-bytes"))
         with Session(edge_engine) as edge_session:
             return await create_report(
+                background_tasks=BackgroundTasks(),
                 site_id="test-site",
                 reporter_name="Upload User",
                 reporter_role="Tester",

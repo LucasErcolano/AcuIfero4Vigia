@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import anyio
+from fastapi import BackgroundTasks
 from sqlmodel import Session
 
 from acuifero_vigia.api.routers.alerts import export_alert_sinagir
@@ -27,6 +28,7 @@ def test_sinagir_export_shape():
     async def run():
         with Session(edge_engine) as s:
             payload = await create_report(
+                background_tasks=BackgroundTasks(),
                 site_id="test-site",
                 reporter_name="t",
                 reporter_role="t",

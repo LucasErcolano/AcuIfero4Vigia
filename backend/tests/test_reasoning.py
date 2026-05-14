@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import anyio
 import pytest
+from fastapi import BackgroundTasks
 from sqlmodel import Session
 
 from acuifero_vigia.api.routers.alerts import get_alert
@@ -93,6 +94,7 @@ def test_alert_persists_reasoning_fields():
     async def run():
         with Session(edge_engine) as s:
             payload = await create_report(
+                background_tasks=BackgroundTasks(),
                 site_id="test-site",
                 reporter_name="t",
                 reporter_role="t",

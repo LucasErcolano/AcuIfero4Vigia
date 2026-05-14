@@ -10,9 +10,27 @@ backend detects the local Gemma runtime is reachable.
 from __future__ import annotations
 
 import json
+import os
 from typing import Any
 
 from acuifero_vigia.adapters.llm import OpenAICompatibleLLM
+
+
+def _resolve_fewshot_count(total: int) -> int:
+    """Number of few-shot examples to inline in the prompt.
+
+    Defaults to all of them (max accuracy). On CPU-only dev machines, set
+    ACUIFERO_FEWSHOT_COUNT to a smaller number (e.g. 4) to keep prompt
+    processing under a usable latency budget.
+    """
+    raw = os.environ.get("ACUIFERO_FEWSHOT_COUNT")
+    if not raw:
+        return total
+    try:
+        n = int(raw)
+    except ValueError:
+        return total
+    return max(1, min(n, total))
 
 
 FEW_SHOT = [
@@ -188,7 +206,8 @@ SYSTEM_PROMPT = (
 def _build_user_prompt(transcript: str, site_context: dict[str, Any]) -> str:
     parts = [f"Contexto del sitio: {json.dumps(site_context, ensure_ascii=True)}"]
     parts.append("Ejemplos:")
-    for ex in FEW_SHOT:
+    count = _resolve_fewshot_count(len(FEW_SHOT))
+    for ex in FEW_SHOT[:count]:
         parts.append(f"Transcript: {ex['in']}")
         parts.append(f"JSON: {json.dumps(ex['out'], ensure_ascii=True)}")
     parts.append(f"Transcript: {transcript}")

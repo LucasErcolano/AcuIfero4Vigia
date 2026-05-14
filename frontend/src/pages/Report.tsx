@@ -1,8 +1,16 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useAppStore } from '../store';
 import { saveReportOffline, toPendingAttachment } from '../lib/idb';
-import { Send, Save, Mic } from 'lucide-react';
+import { Send, Save, Mic, Square } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useMediaRecorder } from '../hooks/useMediaRecorder';
+
+function formatElapsed(ms: number): string {
+  const totalSeconds = Math.floor(ms / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+}
 
 export default function Report() {
   const { sites, isOnline, updateQueueCount, fetchSites, flushQueue } = useAppStore();
@@ -17,11 +25,54 @@ export default function Report() {
   const [fileInputKey, setFileInputKey] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const {
+    isRecording,
+    isSupported: isMicSupported,
+    error: micError,
+    audioBlob,
+    elapsedMs,
+    start: startRecording,
+    stop: stopRecording,
+    reset: resetRecording,
+  } = useMediaRecorder();
+
   useEffect(() => {
     if (sites.length === 0 && isOnline) {
       fetchSites();
     }
   }, [sites.length, isOnline, fetchSites]);
+
+  // When the mic produces a blob, push it into audioFile. The audioBlob
+  // arrives async from MediaRecorder's onstop, so we react to it here.
+  useEffect(() => {
+    if (audioBlob) {
+      const file = new File([audioBlob], 'note.webm', { type: 'audio/webm' });
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- audioBlob is an async output of the recorder hook
+      setAudioFile(file);
+    }
+  }, [audioBlob]);
+
+  // Build & revoke object URL for photo preview.
+  const photoPreviewUrl = useMemo(
+    () => (photoFile ? URL.createObjectURL(photoFile) : null),
+    [photoFile],
+  );
+  useEffect(() => {
+    return () => {
+      if (photoPreviewUrl) {
+        URL.revokeObjectURL(photoPreviewUrl);
+      }
+    };
+  }, [photoPreviewUrl]);
+
+  const handleMicToggle = async () => {
+    if (isRecording) {
+      stopRecording();
+    } else {
+      resetRecording();
+      await startRecording();
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -57,6 +108,7 @@ export default function Report() {
       setTranscriptText('');
       setPhotoFile(null);
       setAudioFile(null);
+      resetRecording();
       setFileInputKey((current) => current + 1);
       navigate('/');
     } catch (err) {
@@ -138,12 +190,39 @@ export default function Report() {
             />
             <button
               type="button"
-              className="absolute bottom-3 right-3 p-2 bg-blue-50 text-blue-600 rounded-full hover:bg-blue-100 transition-colors"
-              title="Voice input (mock)"
+              onClick={handleMicToggle}
+              disabled={!isMicSupported}
+              aria-pressed={isRecording}
+              className={`absolute bottom-3 right-3 p-2 rounded-full transition-colors flex items-center gap-2 ${
+                isRecording
+                  ? 'bg-red-100 text-red-700 hover:bg-red-200'
+                  : 'bg-blue-50 text-blue-600 hover:bg-blue-100'
+              } disabled:opacity-50 disabled:cursor-not-allowed`}
+              title={
+                !isMicSupported
+                  ? 'Grabación no soportada'
+                  : isRecording
+                    ? 'Detener grabación'
+                    : 'Grabar nota de voz'
+              }
             >
-              <Mic className="w-5 h-5" />
+              {isRecording ? (
+                <>
+                  <span className="inline-block w-2 h-2 rounded-full bg-red-600 animate-pulse" aria-hidden="true" />
+                  <span className="text-xs font-semibold">Grabando {formatElapsed(elapsedMs)}</span>
+                  <Square className="w-4 h-4" />
+                </>
+              ) : (
+                <Mic className="w-5 h-5" />
+              )}
             </button>
           </div>
+          {micError && (
+            <p className="mt-2 text-xs text-red-600">{micError}</p>
+          )}
+          {!isMicSupported && !micError && (
+            <p className="mt-2 text-xs text-gray-500">El navegador no soporta grabación de audio.</p>
+          )}
         </div>
 
         <div className="grid grid-cols-2 gap-4">
@@ -155,16 +234,24 @@ export default function Report() {
               key={`photo-${fileInputKey}`}
               type="file"
               accept="image/*"
+              capture="environment"
               onChange={(e) => setPhotoFile(e.target.files?.[0] ?? null)}
               className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
             />
-            {photoFile && (
-              <p className="mt-2 text-xs text-gray-500">Queued photo: {photoFile.name}</p>
+            {photoFile && photoPreviewUrl && (
+              <div className="mt-2 flex items-center gap-2">
+                <img
+                  src={photoPreviewUrl}
+                  alt="Vista previa"
+                  className="w-16 h-16 object-cover rounded-lg border border-gray-200"
+                />
+                <p className="text-xs text-gray-500 truncate">Queued photo: {photoFile.name}</p>
+              </div>
             )}
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Audio Note
+              Audio Note <span className="text-xs text-gray-400">(o subir archivo)</span>
             </label>
             <input
               key={`audio-${fileInputKey}`}

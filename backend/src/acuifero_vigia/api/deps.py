@@ -4,6 +4,7 @@ import json
 
 from sqlmodel import SQLModel, Session
 
+from acuifero_vigia.adapters.asr import FasterWhisperASRAdapter
 from acuifero_vigia.adapters.image_assessment import GemmaImageAssessmentAdapter
 from acuifero_vigia.adapters.llm import OpenAICompatibleLLM
 from acuifero_vigia.adapters.text_structuring_gemma_fewshot import GemmaFewShotTextStructurer
@@ -16,6 +17,7 @@ from acuifero_vigia.services.external_data import ExternalDataService
 llm_client = OpenAICompatibleLLM()
 text_structurer = GemmaFewShotTextStructurer(llm_client)
 image_assessor = GemmaImageAssessmentAdapter()
+asr_client = FasterWhisperASRAdapter()
 external_data_service = ExternalDataService()
 acuifero_engine = AcuiferoAssessmentEngine(
     builder=TemporalEvidenceBuilder(),
