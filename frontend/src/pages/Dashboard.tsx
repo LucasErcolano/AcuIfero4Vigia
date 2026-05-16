@@ -169,6 +169,75 @@ export default function Dashboard() {
     }
   }, [activeAlert]);
 
+  // Parse the live decision_trace (decision-trace-v2 schema) once. The fusion
+  // tiles and audit panel both consume this — for demo fallback (no live alert)
+  // we still use DEMO_FUSION / DEMO_AUDIT.
+  const liveTrace = useMemo<any>(() => {
+    if (isDemo || !activeAlert?.decision_trace) return null;
+    try { return JSON.parse(activeAlert.decision_trace); } catch { return null; }
+  }, [activeAlert, isDemo]);
+
+  const liveSignals = useMemo<SignalInput[]>(() => {
+    if (!liveTrace?.evidence) return DEMO_FUSION;
+    const ev: any[] = Array.isArray(liveTrace.evidence) ? liveTrace.evidence : [];
+    type Best = { score: number; weighted: number; summary: string; observed: number };
+    const best: Record<'camera'|'volunteer'|'hydromet', Best | null> = {
+      camera: null, volunteer: null, hydromet: null,
+    };
+    for (const e of ev) {
+      const src = e.source === 'node' ? 'camera' : (e.source as 'volunteer'|'hydromet'|'camera');
+      if (!(src in best)) continue;
+      const w = Number(e.weighted_score) || 0;
+      const prev = best[src];
+      if (!prev || w > prev.weighted) {
+        best[src] = {
+          score: Number(e.raw_score) || 0,
+          weighted: w,
+          summary: String(e.summary || '').slice(0, 140),
+          observed: Date.parse(e.observed_at) || Date.now(),
+        };
+      }
+    }
+    const now = Date.now();
+    const MODEL_BY_SRC: Record<'camera'|'volunteer'|'hydromet', string> = {
+      camera:    'gemma4:e4b',
+      volunteer: 'gemma4:e2b',
+      hydromet:  'open-meteo',
+    };
+    return (['camera','volunteer','hydromet'] as const).map((src) => {
+      const b = best[src];
+      if (!b) return {
+        source: src, score: 0, status: 'missing' as const,
+        detail: 'sin senal en ventana de 45 min', model: MODEL_BY_SRC[src],
+      };
+      const ageSec = Math.max(0, Math.round((now - b.observed) / 1000));
+      return {
+        source: src,
+        score: b.score,
+        status: ageSec > 1800 ? ('stale' as const) : ('ok' as const),
+        detail: b.summary || `score=${b.score.toFixed(2)}`,
+        ageSeconds: ageSec,
+        model: MODEL_BY_SRC[src],
+      };
+    });
+  }, [liveTrace]);
+
+  const liveAudit = useMemo<AuditEntry[]>(() => {
+    if (!liveTrace?.rules_fired) return DEMO_AUDIT;
+    const fired: string[] = Array.isArray(liveTrace.rules_fired) ? liveTrace.rules_fired.map(String) : [];
+    const has = (needle: string) => fired.some((r) => r.includes(needle));
+    const entries: AuditEntry[] = [
+      { rule: 'RULE_NODE_CRITICAL_LINE',     outcome: has('node_critical_line_crossed') ? 'fired' : 'not_fired', detail: 'Camara fija cruzo la linea critica calibrada.' },
+      { rule: 'RULE_NODE_FAST_RISE',         outcome: has('node_fast_rise') ? 'fired' : 'not_fired',           detail: 'rise_velocity supera umbral 0.08/frame.' },
+      { rule: 'RULE_VOLUNTEER_MARK_EXCEEDED', outcome: has('volunteer_mark_exceeded') ? 'fired' : 'not_fired', detail: 'Reporte humano confirma marca de agua excedida.' },
+      { rule: 'RULE_VOLUNTEER_ROAD_CUT',     outcome: has('volunteer_road_cut') ? 'fired' : 'not_fired',       detail: 'Reporte ciudadano: via cortada / intransitable.' },
+      { rule: 'RULE_VOLUNTEER_HOMES_AFFECTED', outcome: has('volunteer_homes_affected') ? 'fired' : 'not_fired', detail: 'Reporte ciudadano: agua dentro de viviendas.' },
+      { rule: 'RULE_CORROBORATION_MULTI_SRC', outcome: has('corroboration_sources') ? 'fired' : 'not_fired',   detail: 'Dos o mas fuentes con score >= 0.35.' },
+      { rule: 'RULE_TWO_MEDIUM_TO_ORANGE',   outcome: has('two_medium_sources_escalate_to_orange') ? 'fired' : 'not_fired', detail: 'Dos fuentes en banda media -> escalada a naranja.' },
+    ];
+    return entries;
+  }, [liveTrace]);
+
   const invokeAction = (fn: ActionCall['fn']) => {
     setActionState((prev) => ({ ...prev, [fn]: { busy: true } }));
     const at = new Date().toLocaleTimeString('es-AR');
@@ -221,7 +290,7 @@ export default function Dashboard() {
         {/* Left column: signals → evidence → reasoning → audit */}
         <div className="space-y-4">
           <SectionPanel title="Fusión de señales" meta={`fused_score = ${activeAlert.score.toFixed(2)}`}>
-            <SignalFusionRow inputs={DEMO_FUSION} />
+            <SignalFusionRow inputs={liveSignals} />
           </SectionPanel>
 
           <SectionPanel title="Frame de evidencia · narración Gemma" meta={activeAlert.reasoning_model ?? 'local'}>
@@ -244,7 +313,7 @@ export default function Dashboard() {
             />
           )}
 
-          <AuditTrace entries={DEMO_AUDIT} />
+          <AuditTrace entries={liveAudit} />
         </div>
 
         {/* Right column: CAP, action rail, offline sync */}

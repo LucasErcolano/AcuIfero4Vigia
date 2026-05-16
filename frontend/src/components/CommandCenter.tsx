@@ -124,6 +124,7 @@ export interface SignalInput {
   status: 'ok' | 'stale' | 'missing';
   detail: string;            // short ES descriptor
   ageSeconds?: number;
+  model?: string;            // per-source model label (e.g., gemma4:e4b)
 }
 
 const SIGNAL_META: Record<SignalInput['source'], { label: string; icon: typeof Activity; mono: string }> = {
@@ -175,6 +176,11 @@ export function SignalFusionRow({ inputs }: { inputs: SignalInput[] }) {
               <span className="font-mono text-slate-500">{meta.mono}</span>
               <span className="text-slate-500">{formatAge(sig.ageSeconds)}</span>
             </div>
+            {sig.model && (
+              <div className="mt-1 text-[10px] font-mono text-slate-600 truncate">
+                modelo: {sig.model}
+              </div>
+            )}
           </div>
         );
       })}

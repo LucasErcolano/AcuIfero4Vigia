@@ -1,6 +1,13 @@
 # Demo recording path · Persona C — Backend & Fusion command center
 
-This file documents exactly what the Backend & Fusion lead (Persona C) clicks and shows during the 3-minute hackathon recording. The whole story plays out on **one screen**: the operator dashboard at `/`.
+This file documents exactly what the Backend & Fusion lead (Persona C) clicks and shows during the 3-minute hackathon recording.
+
+**Two cuts available:**
+
+1. **Dashboard cut (sections 1-5):** single-screen operator dashboard story, 3 min, uses local React state. Quickest to record.
+2. **Hybrid escalada cut (section 6):** terminal + dashboard split, real backend ingest drives verde -> amarillo -> rojo escalada on the VM (`hz@100.105.56.84`) with Gemma 4 running in Ollama. Most impactful for the jury.
+
+Pick one based on rehearsal time. Both end at the same artifacts: CAP v1.2 XML + decision trace.
 
 Target resolution: **1440 × 900** (zoom browser to ~100%, hide bookmarks bar).
 
@@ -123,7 +130,98 @@ After each click, the button spins for ~1s and a `stdout · function_call log` l
 | `frontend/src/components/CommandCenter.tsx` | **NEW.** Reusable atoms — RiskBanner, SignalFusionRow, EvidencePanel, GemmaReasoning, AuditTrace, ActionRail, CapStatusCard, OfflineSyncCard, IncidentTimeline, SectionPanel, EmptyCommandCenter |
 | `frontend/src/index.css` | Added slate/ops palette + 1440×900 grid utilities (`cc-grid`, `cc-fusion`, `cc-action-btn`, severity strips, etc) |
 
-## 5. If something looks wrong on the day
+## 6. Hybrid recording path - "El semaforo de riesgo" (escalada en vivo)
+
+This is an alternative cut driven by **real backend ingestion** on the VM. The
+operator dashboard reflects every act live: RiskBanner, fusion tiles, timeline
+and CAP card move because a `FusedAlert` was actually written to the DB.
+
+### 6.1 Setup on the VM (`hz@100.105.56.84`)
+
+```bash
+# Terminal A (backend with demo-inject gated router)
+cd /home/hz/work/AcuIfero4Vigia_local/backend
+rm -f data/edge.db data/central.db
+PYTHONPATH=src python3 -m acuifero_vigia.scripts.seed
+ACUIFERO_ENABLE_DEMO_INJECT=1 PYTHONPATH=src \
+  python3 -m uvicorn acuifero_vigia.main:app --host 127.0.0.1 --port 8000
+
+# Terminal B (frontend)
+cd /home/hz/work/AcuIfero4Vigia_local/frontend
+npm run dev -- --host 127.0.0.1 --port 5173
+
+# Terminal C (ollama - already running)
+ollama list   # gemma4:e2b o gemma4:26b deben estar listos
+```
+
+`ACUIFERO_ENABLE_DEMO_INJECT=1` enables `POST /api/demo/inject-node-observation`
+and `POST /api/demo/inject-volunteer-report`, gated routes used only during the
+demo to produce a deterministic verde -> amarillo -> rojo escalada that does NOT
+depend on Gemma's interpretation of free-text transcripts.
+
+> **Note on latency.** Gemma 4 26B Q4_0 on RTX 3060 + RAM offload is slow.
+> Record without worrying — speed up in post. **Do NOT show tok/s or latency
+> overlays on screen.**
+
+### 6.2 Acts (terminal + dashboard split-screen)
+
+Run from the project root on the VM:
+
+```bash
+cd /home/hz/work/AcuIfero4Vigia_local/scripts/demo_persona_c
+bash 00_reset.sh                  # DB clean (verde baseline)
+```
+
+| Act | Script | Source | Expected fused | Dashboard signal |
+|-----|--------|--------|----------------|------------------|
+| 1   | `bash 01_vigia_verde.sh`     | Vigia ciudadano (rutina) | `green` ~0.20 | RiskBanner permanece verde, tile `vol_report` aparece bajo |
+| 2   | `bash 02_acuifero_amarillo.sh` | Acuifero (cota elevada, sin cruzar linea critica) | `yellow` ~0.52 | RiskBanner pasa a amarillo, tile `cv_node` aparece, timeline gana punto |
+| 3   | `bash 03_fusion_rojo.sh`     | 3 Vigia simultaneos + CAP/SINAGIR export | `red` >=0.86 | RiskBanner rojo pulsante, los 3 tiles activos, CAP card `emitido`, sirena en log |
+
+Recommended cadence: ~10 s between scripts so the dashboard's polling tick (`useAppStore`) repaints with the new alert.
+
+### 6.3 What to say (escalada narrative)
+
+- **Act 1 (verde):** *"Un vecino reporta lluvia fuerte pero el canal corre normal. El sistema lo registra; no escala — verde."*
+- **Act 2 (amarillo):** *"La camara fija detecta que la cota supera la linea de referencia, pero no cruza la critica. El motor de fusion sube a amarillo. Una sola fuente con score moderado: precaucion, no panico."*
+- **Act 3 (rojo):** *"Tres Vigia ciudadanos reportan al mismo tiempo: marca del puente pasada, calle cortada, agua en las casas. La corroboracion humana cruzada con la lectura de camara dispara el `fused_score` por encima de 0.82. Rojo. Sirena local. Alerta CAP v1.2 lista para Defensa Civil."*
+- **Act 4 (cierre):** *"Aca esta el decision trace en JSON con cada regla disparada, y el XML CAP v1.2 con `category`, `urgency`, `severity` listos para SINAGIR."*
+
+Show in terminal: SINAGIR JSON (`/tmp/sinagir_<id>.json`) + CAP XML (`/tmp/cap_alert_<id>.xml`). Both written by `03_fusion_rojo.sh`.
+
+### 6.4 Why a gated debug router (not free-text transcripts)
+
+The Vigia `/api/reports` endpoint runs the transcript through Gemma's
+`structure_observation`. For a recorded escalada we need deterministic scores,
+not whatever Gemma decides for a given phrase. `POST /api/demo/inject-*` writes
+the same DB rows the real ingest would, **with controlled `severity_score`** and
+metadata, then calls the same `recompute_site_alert` fusion engine. The fusion,
+reasoning and CAP outputs are 100% real — only the parser is bypassed.
+
+The router is registered **only when `ACUIFERO_ENABLE_DEMO_INJECT=1`** (see
+`backend/src/acuifero_vigia/api/routers/demo_inject.py` and the conditional
+include in `backend/src/acuifero_vigia/main.py`). Default production builds do
+not expose it.
+
+### 6.5 Live smoke (record locally on the VM)
+
+```
+[Acto 1] Vigia ciudadano envia reporte a puente-arroyo-01...
+  -> level=green score=0.2 trigger=volunteer
+[Acto 2] Acuifero (camara fija) inyecta lectura elevada a puente-arroyo-01...
+  -> level=yellow score=0.52 trigger=node
+[Acto 3] Tres reportes Vigia simultaneos a puente-arroyo-01...
+  R1 ... -> level=red score=0.86 alarm=True
+  R2 ... -> level=red score=0.8594 alarm=True
+  R3 ... -> level=red score=0.96 alarm=True
+[Acto 4a] Decision trace SINAGIR-ready  -> /tmp/sinagir_<id>.json
+[Acto 4b] Emitiendo CAP v1.2 XML institucional  -> /tmp/cap_alert_<id>.xml
+```
+
+If the numbers look different, run `00_reset.sh` first — the 45-min evidence
+window means stale rows from a previous run will leak into the next take.
+
+## 7. If something looks wrong on the day
 
 - **Risk strip is wrong color.** The level comes from the live alert. If a real RED alert came in, the strip is RED and pulses. If the level is wrong, run the seed + the sample-node-analysis curl above to force RED.
 - **Action rail does nothing.** Check the browser console for React errors. Buttons are pure UI in this commit and won't fail silently — every click writes to the `stdout` panel.
