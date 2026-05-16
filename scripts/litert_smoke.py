@@ -57,10 +57,18 @@ def main() -> None:
         default=None,
         help="Override ACUIFERO_NODE_MAX_OUTPUT_TOKENS before runtime initialization.",
     )
+    parser.add_argument(
+        "--multimodal-engine-tokens",
+        type=int,
+        default=None,
+        help="Override ACUIFERO_NODE_MULTIMODAL_MAX_OUTPUT_TOKENS before runtime initialization.",
+    )
     args = parser.parse_args()
 
     if args.engine_tokens is not None:
         os.environ["ACUIFERO_NODE_MAX_OUTPUT_TOKENS"] = str(args.engine_tokens)
+    if args.multimodal_engine_tokens is not None:
+        os.environ["ACUIFERO_NODE_MULTIMODAL_MAX_OUTPUT_TOKENS"] = str(args.multimodal_engine_tokens)
 
     runtime = LiteRTNodeRuntime()
     health = runtime.health()
@@ -106,7 +114,10 @@ def main() -> None:
                 "elapsed_seconds": elapsed,
                 "rss_mb": _rss_mb(),
                 "engine_tokens": runtime.settings.acuifero_node_max_output_tokens,
+                "multimodal_engine_tokens": runtime.settings.acuifero_node_multimodal_max_output_tokens,
                 "backend": runtime.settings.acuifero_node_backend,
+                "multimodal_backend": runtime.settings.acuifero_node_multimodal_backend,
+                "multimodal_vision_backend": runtime.settings.acuifero_node_multimodal_vision_backend,
                 "model": runtime.model_name,
             },
         }

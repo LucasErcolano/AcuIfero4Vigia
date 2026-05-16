@@ -1,9 +1,9 @@
 # Raspberry Pi Acuifero fixed node
 
-This guide prepares the fixed Acuifero camera node for the new Gemma 4
-multimodal-only plan. The Raspberry Pi 8 GB profile is a minimal demo; the
-Raspberry Pi 16 GB / workstation profile is the production code path we can
-exercise locally before buying or deploying the larger Pi.
+This guide prepares a fixed Acuifero camera node with Gemma 4 through
+LiteRT-LM. The Raspberry Pi 8 GB profile is the minimum field/demo target; the
+Raspberry Pi 16 GB / workstation profile uses the same production code path
+with more frames and a larger context budget.
 
 ## Pi 8 demo profile
 
@@ -14,10 +14,12 @@ export ACUIFERO_UPLOAD_DIR=/mnt/acuifero/data/uploads
 export ACUIFERO_NODE_PROVIDER=litert
 export ACUIFERO_NODE_MODEL_PATH=/mnt/acuifero/data/models/gemma-4-E2B-it.litertlm
 export ACUIFERO_NODE_BACKEND=gpu
-export ACUIFERO_NODE_VISION_BACKEND=gpu
+export ACUIFERO_NODE_MULTIMODAL_BACKEND=cpu
+export ACUIFERO_NODE_MULTIMODAL_VISION_BACKEND=cpu
 export ACUIFERO_NODE_CACHE_DIR=/mnt/acuifero/data/litert-cache
-export ACUIFERO_NODE_ENABLE_SPECULATIVE_DECODING=false
-export ACUIFERO_NODE_MAX_OUTPUT_TOKENS=256
+export ACUIFERO_NODE_ENABLE_SPECULATIVE_DECODING=true
+export ACUIFERO_NODE_MAX_OUTPUT_TOKENS=1024
+export ACUIFERO_NODE_MULTIMODAL_MAX_OUTPUT_TOKENS=2048
 export ACUIFERO_MULTIMODAL_ENABLED=true
 export ACUIFERO_MULTIMODAL_MODEL=gemma-4-E2B-it.litertlm
 export ACUIFERO_MULTIMODAL_MAX_FRAMES=1
@@ -31,25 +33,30 @@ This mode extracts one small frame from each short clip using ffmpeg, optimizes
 it with Pillow, and sends it directly to Gemma 4 multimodal. There is no OpenCV
 visual analysis in this path.
 
-Measured Raspberry Pi 5 status on this branch:
+Measured Raspberry Pi 5 status for this profile:
 
 - `ACUIFERO_NODE_BACKEND=gpu` works for LiteRT text inference.
-- `ACUIFERO_NODE_BACKEND=cpu` fails during engine creation on this device.
-- `litert-lm-api==0.11.0` is installed in `backend/.venv`.
-- Verified model path: `~/AcuIfero4Vigia-litert/backend/data/models/gemma-4-E2B-it.litertlm`.
-- Verified sample clip path:
-  `~/AcuIfero4Vigia-litert/fixtures/media/usgs_silverado_fire_2015_fixed_cam.mp4`.
-- Gemma 4 E2B multimodal still fails on Pi 5 because LiteRT picks Mesa
+- `litert-lm-api==0.11.0` is the tested Python package version.
+- The expected model file is `gemma-4-E2B-it.litertlm` under
+  `$ACUIFERO_DATA_DIR/models` or the explicit `ACUIFERO_NODE_MODEL_PATH`.
+- The bundled sample clip is
+  `fixtures/media/usgs_silverado_fire_2015_fixed_cam.mp4` under the repo root.
+- Gemma 4 E2B GPU multimodal fails on Pi 5 because LiteRT picks Mesa
   `llvmpipe` WebGPU and the vision encoder exceeds the available buffer size.
+- Gemma 4 E2B one-image multimodal succeeds on Pi 5 with
+  `ACUIFERO_NODE_BACKEND=gpu`, `ACUIFERO_NODE_MULTIMODAL_BACKEND=cpu`,
+  `ACUIFERO_NODE_MULTIMODAL_VISION_BACKEND=cpu`,
+  `ACUIFERO_NODE_MULTIMODAL_MAX_OUTPUT_TOKENS=2048`, and speculative decoding
+  enabled.
 - Generic cold text smoke is real LiteRT inference but slow on this Pi:
   `elapsed_seconds=130` in the measured run.
-- Acuifero alert reasoning text now has a Pi-short prompt. A measured run with
-  `ACUIFERO_NODE_MAX_OUTPUT_TOKENS=256` produced `reasoning_model=gemma-4-E2B-it.litertlm`
+- Acuifero alert reasoning text now has a Pi-short prompt. A previous measured
+  Pi run with a 256-token engine produced `reasoning_model=gemma-4-E2B-it.litertlm`
   in `350.18s` with about `3120 MB` max RSS. This is real LiteRT-LM inference,
-  but too slow to claim stable operational latency on Raspberry Pi 5 8 GB.
-- Result today: `sample-node-analysis` reaches conservative fallback
-  (`runner.mode=multimodal-unavailable-fallback`) on this exact hardware/model
-  pairing.
+  but too slow to claim stable operational latency on Raspberry Pi 5 8 GB. The
+  current text profile uses 1024 tokens; the multimodal image profile uses 2048
+  tokens because LiteRT internally expands the frame to more than 2300 visual
+  patches.
 
 ## Pi 16 / workstation production profile
 
@@ -71,6 +78,9 @@ with more visual evidence per analysis.
 From the repo root, after creating `backend/.venv`:
 
 ```bash
+export REPO_DIR=/opt/acuifero-vigia
+cd "$REPO_DIR"
+python3 -m venv backend/.venv
 source backend/.venv/bin/activate
 python -m pip install -e backend/.[dev]
 python scripts/fetch_litert_model.py
@@ -84,16 +94,18 @@ Vigia or local experimentation, not as the Acuifero production engine on the Pi.
 
 ## Reproduce measured LiteRT inference on the Pi
 
-From `~/AcuIfero4Vigia-litert`:
+From the repo root:
 
 ```bash
+export REPO_DIR=/opt/acuifero-vigia
+cd "$REPO_DIR"
 export PYTHONPATH=$PWD/backend/src
 export ACUIFERO_NODE_PROVIDER=litert
 export ACUIFERO_NODE_MODEL_PATH=$PWD/backend/data/models/gemma-4-E2B-it.litertlm
 export ACUIFERO_NODE_BACKEND=gpu
-export ACUIFERO_NODE_VISION_BACKEND=gpu
 export ACUIFERO_NODE_CACHE_DIR=$PWD/backend/data/litert-cache
-export ACUIFERO_NODE_MAX_OUTPUT_TOKENS=256
+export ACUIFERO_NODE_ENABLE_SPECULATIVE_DECODING=true
+export ACUIFERO_NODE_MAX_OUTPUT_TOKENS=1024
 backend/.venv/bin/python scripts/litert_smoke.py --reasoning
 ```
 
@@ -106,6 +118,76 @@ Expected success signal:
 This command does not start or query Ollama. If LiteRT fails, the result is
 `model_name=rule-fallback`; that is a failure to count as P1 evidence, not an
 automatic production fallback to Ollama.
+
+To reproduce the measured one-image LiteRT path on the Pi:
+
+```bash
+export REPO_DIR=/opt/acuifero-vigia
+cd "$REPO_DIR"
+export PYTHONPATH=$PWD/backend/src
+export ACUIFERO_NODE_PROVIDER=litert
+export ACUIFERO_NODE_MODEL_PATH=$PWD/backend/data/models/gemma-4-E2B-it.litertlm
+export ACUIFERO_NODE_BACKEND=gpu
+export ACUIFERO_NODE_MULTIMODAL_BACKEND=cpu
+export ACUIFERO_NODE_MULTIMODAL_VISION_BACKEND=cpu
+export ACUIFERO_NODE_CACHE_DIR=$PWD/backend/data/litert-cache
+export ACUIFERO_NODE_ENABLE_SPECULATIVE_DECODING=true
+export ACUIFERO_NODE_MULTIMODAL_MAX_OUTPUT_TOKENS=2048
+backend/.venv/bin/python scripts/litert_smoke.py --image fixtures/frames/silverado_060s.jpg
+```
+
+Expected success signal: the result JSON is `{"status":"ok","engine":"litert"}`
+and LiteRT logs drafted/verified speculative tokens.
+
+This is a one-image runtime smoke. It proves the LiteRT multimodal engine can
+read an image, but it is not the full Acuifero endpoint proof.
+
+## Reproduce the full Acuifero P1 endpoint proof
+
+Start the backend with the Pi profile:
+
+```bash
+export REPO_DIR=/opt/acuifero-vigia
+cd "$REPO_DIR"
+./scripts/run_acuifero_pi8_multimodal_demo.sh
+```
+
+From another terminal:
+
+```bash
+curl -sf http://127.0.0.1:8000/api/settings/runtime | jq '.acuifero | {
+  provider,
+  backend,
+  multimodal_backend,
+  multimodal_vision_backend,
+  speculative_decoding,
+  engine_ready,
+  p1_runtime_ready,
+  model_path
+}'
+
+curl -sf -X POST \
+  http://127.0.0.1:8000/api/sites/silverado-fixed-cam-usgs/sample-node-analysis \
+  | jq '{
+    assessment_mode: .observation.assessment_mode,
+    runner: .observation.runner,
+    frames_analyzed: .observation.frames_analyzed,
+    alert_level: .alert.level
+  }'
+```
+
+Measured Raspberry Pi 5 result for the sample endpoint:
+
+- runtime: `provider=litert`, `backend=gpu`, `multimodal_backend=cpu`,
+  `multimodal_vision_backend=cpu`, `speculative_decoding=true`,
+  `engine_ready=true`, `p1_runtime_ready=true`
+- endpoint: `assessment_mode=gemma4-multimodal-v1`,
+  `runner.mode=litert-multimodal-temporal`, `frames_analyzed=1`,
+  `alert.level=green`
+
+This endpoint result is the full Acuifero P1 proof. If the endpoint returns
+`runner.mode=multimodal-unavailable-fallback`, do not count the visual flow as
+P1 even if `/api/settings/runtime` reports `p1_runtime_ready=true`.
 
 ## First boot
 
@@ -154,9 +236,19 @@ The guard records a short MJPEG AVI with ffmpeg and posts it to
 
 - `acuifero.provider=litert` means the node is configured for LiteRT-LM.
 - `acuifero.engine_ready=true` means the LiteRT runtime and model file are ready.
+- `acuifero.multimodal_backend=cpu` and
+  `acuifero.multimodal_vision_backend=cpu` are the Pi-safe image profile.
+- `acuifero.speculative_decoding=true` means the LiteRT engine is created with
+  speculative decoding enabled.
+- `acuifero.p1_runtime_ready=true` means the configured Acuifero node runtime is
+  LiteRT-LM and the engine/model are ready. It is not proof that an analysis has
+  completed.
+- `acuifero.counts_for_p1=true` is kept as a compatibility alias for
+  `p1_runtime_ready`; prefer the clearer field in new docs and checks.
 - `runner.mode=litert-multimodal-temporal` means Gemma 4 read the image(s) through LiteRT-LM.
-- `runner.mode=multimodal-unavailable-fallback` is the current expected result on
-  the measured Pi 5 + Gemma 4 E2B setup until the vision path fits the device.
+- `runner.mode=multimodal-unavailable-fallback` means the CPU multimodal profile
+  did not return valid JSON for the endpoint run and should be treated as a
+  failed visual P1 proof.
 - `fallback_used=true` means frames were prepared, but Gemma was down, timed out,
   or returned invalid JSON.
 - Evidence images and JSON manifests are stored under `ACUIFERO_UPLOAD_DIR`.

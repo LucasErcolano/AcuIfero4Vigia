@@ -35,6 +35,7 @@ async def get_runtime_status() -> RuntimeStatus:
             f"Ollama development runtime for Acuifero. "
             f"LLM detail: {llm_status.detail}"
         )
+    p1_runtime_ready = settings.acuifero_node_provider == "litert" and acuifero_engine_ready
     return RuntimeStatus(
         is_online=deps.is_online,
         llm={
@@ -49,8 +50,19 @@ async def get_runtime_status() -> RuntimeStatus:
             "provider": acuifero_node_status.provider,
             "backend": acuifero_node_status.backend,
             "vision_backend": settings.acuifero_node_vision_backend,
+            "multimodal_backend": settings.acuifero_node_multimodal_backend,
+            "multimodal_vision_backend": settings.acuifero_node_multimodal_vision_backend,
+            "speculative_decoding": settings.acuifero_node_enable_speculative_decoding,
+            "max_output_tokens": settings.acuifero_node_max_output_tokens,
+            "multimodal_max_output_tokens": settings.acuifero_node_multimodal_max_output_tokens,
             "engine_ready": acuifero_engine_ready,
             "engine_detail": acuifero_engine_detail,
+            "counts_for_p1": p1_runtime_ready,
+            "p1_runtime_ready": p1_runtime_ready,
+            "p1_evidence_required": (
+                "Runtime readiness only. Jury-facing P1 evidence requires a completed "
+                "Acuifero analysis with runner.mode=litert-multimodal-temporal."
+            ),
             "model_path": acuifero_node_status.model_path,
             "cache_dir": str(settings.acuifero_node_cache_dir),
             "data_dir": str(settings.data_dir),

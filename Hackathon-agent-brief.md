@@ -13,7 +13,7 @@ and not an OpenCV-first scorer anymore.
   - `Vigia` = volunteer mobile app, offline-first, photo + voice + observation -> structured JSON.
   - Both feed a local decision engine that produces a `FusedAlert` with transparent reasoning.
 - **Users**: civil defense volunteers and municipal coordinators in flood-prone towns along Argentina's Parana, Salado, and Paraguay rivers.
-- **Acuifero node target**: fixed-camera Raspberry Pi 5, 8 GB RAM, 64-bit OS, SSD-backed `backend/data`, Gemma 4 E2B via local Ollama, text-first temporal evidence by default.
+- **Acuifero node target**: fixed-camera Raspberry Pi 5, 8 GB RAM, 64-bit OS, SSD-backed data directory, Gemma 4 E2B via LiteRT-LM, with GPU text/reasoning and the Pi-safe CPU multimodal image profile.
 - **Vigia target**: separate volunteer/user node; do not size the fixed Acuifero Raspberry profile around Vigia.
 
 ## Updated architectural claim

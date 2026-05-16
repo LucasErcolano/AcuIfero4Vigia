@@ -16,8 +16,14 @@ interface RuntimeStatus {
     provider: string;
     backend: string;
     vision_backend: string;
+    multimodal_backend: string;
+    multimodal_vision_backend: string;
+    speculative_decoding: boolean;
+    max_output_tokens: number;
+    multimodal_max_output_tokens: number;
     engine_ready: boolean;
     engine_detail: string;
+    counts_for_p1: boolean;
     model_path: string;
     cache_dir: string;
     data_dir: string;
@@ -180,10 +186,16 @@ export default function Settings() {
             <div><span className="text-gray-500">Provider:</span> {runtime.acuifero.provider}</div>
             <div><span className="text-gray-500">Backend:</span> {runtime.acuifero.backend}</div>
             <div><span className="text-gray-500">Vision backend:</span> {runtime.acuifero.vision_backend}</div>
+            <div><span className="text-gray-500">Multimodal backend:</span> {runtime.acuifero.multimodal_backend}</div>
+            <div><span className="text-gray-500">Multimodal vision backend:</span> {runtime.acuifero.multimodal_vision_backend}</div>
+            <div><span className="text-gray-500">Speculative decoding:</span> {runtime.acuifero.speculative_decoding ? 'Enabled' : 'Disabled'}</div>
+            <div><span className="text-gray-500">Engine output tokens:</span> {runtime.acuifero.max_output_tokens}</div>
+            <div><span className="text-gray-500">Multimodal engine tokens:</span> {runtime.acuifero.multimodal_max_output_tokens}</div>
             <div className="flex items-center gap-2">
               {runtime.acuifero.engine_ready ? <CheckCircle2 className="w-4 h-4 text-green-600" /> : <ServerCrash className="w-4 h-4 text-red-600" />}
               <span>{runtime.acuifero.engine_ready ? acuiferoReadyLabel : acuiferoNotReadyLabel}</span>
             </div>
+            <div><span className="text-gray-500">Counts for P1:</span> {runtime.acuifero.counts_for_p1 ? 'Yes' : 'No'}</div>
             <div className="break-all"><span className="text-gray-500">Model path:</span> {runtime.acuifero.model_path}</div>
             <div className="break-all"><span className="text-gray-500">Cache dir:</span> {runtime.acuifero.cache_dir}</div>
             <div className="break-all"><span className="text-gray-500">Data dir:</span> {runtime.acuifero.data_dir}</div>
@@ -204,11 +216,13 @@ export default function Settings() {
 ACUIFERO_DATA_DIR=/mnt/acuifero/data
 ACUIFERO_NODE_PROVIDER=litert
 ACUIFERO_NODE_MODEL_PATH=backend/data/models/gemma-4-E2B-it.litertlm
-ACUIFERO_NODE_BACKEND=cpu
-ACUIFERO_NODE_VISION_BACKEND=cpu
+ACUIFERO_NODE_BACKEND=gpu
+ACUIFERO_NODE_MULTIMODAL_BACKEND=cpu
+ACUIFERO_NODE_MULTIMODAL_VISION_BACKEND=cpu
 ACUIFERO_NODE_CACHE_DIR=backend/data/litert-cache
-ACUIFERO_NODE_ENABLE_SPECULATIVE_DECODING=false
-ACUIFERO_NODE_MAX_OUTPUT_TOKENS=256
+ACUIFERO_NODE_ENABLE_SPECULATIVE_DECODING=true
+ACUIFERO_NODE_MAX_OUTPUT_TOKENS=1024
+ACUIFERO_NODE_MULTIMODAL_MAX_OUTPUT_TOKENS=2048
 ACUIFERO_MULTIMODAL_ENABLED=true
 ACUIFERO_MULTIMODAL_VERIFIER_ENABLED=false
 ACUIFERO_MULTIMODAL_MODEL=gemma-4-E2B-it.litertlm

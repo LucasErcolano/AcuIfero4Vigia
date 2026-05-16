@@ -357,7 +357,7 @@ class AcuiferoAssessmentEngine:
     def _fallback_verdict(self, pack: TemporalEvidencePack) -> AssessmentVerdict:
         return AssessmentVerdict(
             assessment_level="yellow",
-            assessment_score=0.4,
+            assessment_score=0.42,
             temporal_summary=(
                 f"Acuifero preparo {len(pack.selected_frames)} frame(s) para Gemma 4 multimodal, "
                 "pero el modelo no devolvio una respuesta valida."

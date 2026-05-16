@@ -86,8 +86,8 @@ def test_litert_runtime_generate_text_uses_engine(monkeypatch, tmp_path: Path):
         entry.get("kwargs") == {
             "backend": "cpu",
             "cache_dir": str(tmp_path / "litert-cache"),
-            "max_num_tokens": 256,
-            "enable_speculative_decoding": False,
+            "max_num_tokens": 1024,
+            "enable_speculative_decoding": True,
         }
         for entry in calls
     )
@@ -169,6 +169,9 @@ def test_litert_runtime_uses_separate_multimodal_engine(monkeypatch, tmp_path: P
     monkeypatch.setenv("ACUIFERO_NODE_MODEL_PATH", str(model_path))
     monkeypatch.setenv("ACUIFERO_NODE_BACKEND", "gpu")
     monkeypatch.setenv("ACUIFERO_NODE_VISION_BACKEND", "cpu")
+    monkeypatch.setenv("ACUIFERO_NODE_MULTIMODAL_BACKEND", "cpu")
+    monkeypatch.setenv("ACUIFERO_NODE_MULTIMODAL_VISION_BACKEND", "cpu")
+    monkeypatch.setenv("ACUIFERO_NODE_MULTIMODAL_MAX_OUTPUT_TOKENS", "2048")
 
     from acuifero_vigia.adapters.litert_node import LiteRTNodeRuntime
 
@@ -209,9 +212,76 @@ def test_litert_runtime_uses_separate_multimodal_engine(monkeypatch, tmp_path: P
     runtime.generate_multimodal_json("system prompt", "user prompt", [image_path])
 
     assert calls[0]["kwargs"]["backend"] == "gpu"
+    assert calls[0]["kwargs"]["max_num_tokens"] == 1024
     assert "vision_backend" not in calls[0]["kwargs"]
-    assert calls[1]["kwargs"]["backend"] == "gpu"
+    assert calls[1]["kwargs"]["backend"] == "cpu"
     assert calls[1]["kwargs"]["vision_backend"] == "cpu"
+    assert calls[1]["kwargs"]["max_num_tokens"] == 2048
+
+
+def test_litert_runtime_honors_speculative_decoding_override(monkeypatch, tmp_path: Path):
+    model_path = tmp_path / "gemma-4-E2B-it.litertlm"
+    model_path.write_bytes(b"fake-model")
+
+    monkeypatch.setenv("ACUIFERO_NODE_PROVIDER", "litert")
+    monkeypatch.setenv("ACUIFERO_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("ACUIFERO_NODE_MODEL_PATH", str(model_path))
+    monkeypatch.setenv("ACUIFERO_NODE_ENABLE_SPECULATIVE_DECODING", "false")
+
+    from acuifero_vigia.adapters.litert_node import LiteRTNodeRuntime
+
+    calls: list[dict[str, object]] = []
+
+    class FakeConversation:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def send_message(self, _message):
+            return {"content": [{"text": "ok"}]}
+
+    class FakeEngine:
+        def __init__(self, _model_path, **kwargs):
+            calls.append(kwargs)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def create_conversation(self):
+            return FakeConversation()
+
+    fake_module = SimpleNamespace(
+        Engine=FakeEngine,
+        Backend=SimpleNamespace(CPU="cpu", GPU="gpu"),
+    )
+
+    runtime = LiteRTNodeRuntime()
+    monkeypatch.setattr(runtime, "_import_litert_module", lambda: fake_module)
+
+    assert runtime.generate_text("system prompt", "user prompt") == "ok"
+    assert calls[0]["backend"] == "gpu"
+    assert calls[0]["enable_speculative_decoding"] is False
+
+
+def test_litert_runtime_repairs_truncated_json_object():
+    from acuifero_vigia.adapters.litert_node import LiteRTNodeRuntime
+
+    raw = (
+        '{"assessment_level":"green",'
+        '"critical_evidence":{"confidence":0.8}'
+    )
+
+    parsed = LiteRTNodeRuntime._extract_json(raw)
+
+    assert parsed == {
+        "assessment_level": "green",
+        "critical_evidence": {"confidence": 0.8},
+    }
 
 
 def test_litert_runtime_returns_none_when_dependency_is_missing(monkeypatch, tmp_path: Path):
@@ -291,4 +361,72 @@ def test_litert_runner_parses_json_payload(monkeypatch, tmp_path: Path):
     assert verdict.assessment_level == "orange"
     assert 0.75 < verdict.assessment_score < 0.77
     assert verdict.runner_name == "gemma-4-E2B-it.litertlm"
+    assert verdict.runner_mode == "litert-multimodal-temporal"
+
+
+def test_litert_runner_retries_invalid_payload(monkeypatch, tmp_path: Path):
+    from datetime import datetime
+
+    from acuifero_vigia.adapters.video_assessment import LiteRTGemmaRunner
+    from acuifero_vigia.services.acuifero_assessment import AssessmentArtifactPack, EvidenceFrame, TemporalEvidencePack
+
+    image_path = tmp_path / "synthetic.jpg"
+    image_path.write_bytes(b"fake-image")
+
+    class FakeRuntime:
+        model_name = "gemma-4-E2B-it.litertlm"
+
+        def __init__(self):
+            self.calls = 0
+
+        def generate_multimodal_json(self, *args, **kwargs):
+            self.calls += 1
+            if self.calls == 1:
+                return None
+            return {
+                "assessment_level": "yellow",
+                "assessment_score": 0.45,
+                "temporal_summary": "El agua se ve estable en el cuadro.",
+                "reasoning_summary": "La primera respuesta fue invalida, pero el reintento devolvio JSON valido.",
+                "reasoning_steps": ["reintentar", "parsear json"],
+                "critical_evidence": {"confidence": 0.7},
+            }
+
+    pack = TemporalEvidencePack(
+        site_id="test-site",
+        site_name="Puente Test",
+        site_region="Zona Demo",
+        video_path=str(image_path),
+        source_type="frame",
+        started_at=datetime.utcnow(),
+        ended_at=datetime.utcnow(),
+        frames_analyzed=1,
+        selected_frames=[
+            EvidenceFrame(
+                frame_path=str(image_path),
+                timestamp_s=0.0,
+                brightness=-1,
+                contrast=-1,
+                motion_score=-1,
+                edge_strength=-1,
+                waterline_ratio_hint=-1,
+                waterline_y=-1,
+            )
+        ],
+        evidence_frame_path=str(image_path),
+        reference_y=0,
+        critical_y=0,
+        summary_metrics={"mode": "gemma4-multimodal-only"},
+        artifact_pack=AssessmentArtifactPack(
+            manifest_path="manifest.json",
+            selected_frame_paths=[str(image_path)],
+            evidence_frame_path=str(image_path),
+        ),
+    )
+    runtime = FakeRuntime()
+
+    verdict = LiteRTGemmaRunner(runtime).assess(pack)
+
+    assert runtime.calls == 2
+    assert verdict is not None
     assert verdict.runner_mode == "litert-multimodal-temporal"

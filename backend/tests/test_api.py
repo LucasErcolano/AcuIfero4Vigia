@@ -196,6 +196,7 @@ def test_node_analysis_with_image_media(tmp_path: Path):
     assert payload["observation"]["assessment_mode"] == "gemma4-multimodal-v1"
     assert payload["observation"]["artifact_id"] is not None
     assert payload["observation"]["runner"]["mode"] in {
+        "litert-multimodal-temporal",
         "ollama-multimodal-temporal",
         "multimodal-unavailable-fallback",
     }

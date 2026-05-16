@@ -3,8 +3,8 @@
 Every `FusedAlert` of level yellow/orange/red now carries a Spanish-language reasoning
 block (`reasoning_summary`, `reasoning_chain`, `reasoning_model`) produced by the local
 Gemma runtime. Green alerts skip the LLM; the field is populated with a rule-skip
-sentence. If Ollama is unreachable, a deterministic fallback fills the block so alert
-emission never blocks on model availability.
+sentence. If the configured Gemma endpoint is unreachable, a deterministic
+fallback fills the block so alert emission never blocks on model availability.
 
 Service: `backend/src/acuifero_vigia/services/reasoning.py`
 Wired in: `backend/src/acuifero_vigia/services/decision_engine.py::recompute_site_alert`
@@ -30,7 +30,7 @@ Inputs:
 - volunteer parsed: water_level_category=medium, trend=rising, road_status=caution
 - hydromet: precipitation_mm=3.1, river_discharge_trend=0.6
 
-Gemma output (real, `gemma4:e2b` via Ollama):
+Gemma output from a development run:
 
 ```
 reasoning_model: gemma4:e2b
@@ -65,7 +65,7 @@ reasoning_chain:
 
 ## Fallback example (LLM unreachable)
 
-If Ollama is down, the same red scenario yields:
+If the configured Gemma endpoint is down, the same red scenario yields:
 
 ```
 reasoning_model: rule-fallback

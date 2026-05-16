@@ -208,12 +208,17 @@ class LiteRTGemmaRunner:
         ]
         if not image_paths:
             return None
-        payload = self.runtime.generate_multimodal_json(
-            SYSTEM_PROMPT,
-            OllamaGemmaRunner._build_user_prompt(pack),
-            image_paths,
-            max_tokens=min(512, self.settings.acuifero_node_max_output_tokens),
-        )
+        user_prompt = OllamaGemmaRunner._build_user_prompt(pack)
+        payload = None
+        for _attempt in range(2):
+            payload = self.runtime.generate_multimodal_json(
+                SYSTEM_PROMPT,
+                user_prompt,
+                image_paths,
+                max_tokens=min(512, self.settings.acuifero_node_max_output_tokens),
+            )
+            if isinstance(payload, dict):
+                break
         if not isinstance(payload, dict):
             return None
         return _normalize_verdict_payload(
