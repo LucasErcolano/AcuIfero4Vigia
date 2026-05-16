@@ -14,7 +14,8 @@ dependencies = [
     "aiofiles",
     "httpx",
     "orjson",
-    "faster-whisper"
+    "faster-whisper",
+    "litert-lm-api==0.11.0"
 ]
 
 [project.optional-dependencies]

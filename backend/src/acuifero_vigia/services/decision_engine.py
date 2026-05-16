@@ -64,6 +64,8 @@ def normalize_score(score: float | None) -> float:
 def temporal_weight(observed_at: datetime, now: datetime, window_minutes: int) -> float:
     age_seconds = max(0.0, (now - observed_at).total_seconds())
     window_seconds = max(60.0, window_minutes * 60.0)
+    if age_seconds < 1.0:
+        return 1.0
     if age_seconds > window_seconds:
         return 0.0
     return max(STALE_DECAY_FLOOR, 1.0 - (age_seconds / window_seconds) * (1.0 - STALE_DECAY_FLOOR))

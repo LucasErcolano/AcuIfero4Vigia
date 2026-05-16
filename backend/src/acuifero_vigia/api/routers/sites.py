@@ -5,7 +5,7 @@ import json
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 
-from acuifero_vigia.api.deps import enqueue_entity, external_data_service, llm_client
+from acuifero_vigia.api.deps import acuifero_node_runtime, enqueue_entity, external_data_service
 from acuifero_vigia.api.serializers import serialize_external_snapshot, site_payload
 from acuifero_vigia.db.database import get_session
 from acuifero_vigia.models.domain import FusedAlert, HydrometSnapshot, Site, SiteCalibration
@@ -91,7 +91,7 @@ async def refresh_external_snapshot(site_id: str, session: Session = Depends(get
     session.add(snapshot)
     session.flush()
     enqueue_entity(session, "hydromet_snapshot", snapshot)
-    alert: FusedAlert = recompute_site_alert(session, site_id, llm_client)
+    alert: FusedAlert = recompute_site_alert(session, site_id, acuifero_node_runtime)
     session.flush()
     enqueue_entity(session, "fused_alert", alert)
     session.commit()

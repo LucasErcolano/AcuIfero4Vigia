@@ -28,6 +28,13 @@ class Settings:
     llm_model: str
     llm_api_key: str
     llm_timeout_seconds: float
+    acuifero_node_provider: str
+    acuifero_node_model_path: Path
+    acuifero_node_backend: str
+    acuifero_node_vision_backend: str
+    acuifero_node_enable_speculative_decoding: bool
+    acuifero_node_cache_dir: Path
+    acuifero_node_max_output_tokens: int
     acuifero_multimodal_enabled: bool
     acuifero_multimodal_verifier_enabled: bool
     acuifero_multimodal_base_url: str
@@ -81,6 +88,18 @@ def get_settings() -> Settings:
     asr_model_cache_dir = Path(
         os.environ.get("ACUIFERO_ASR_MODEL_CACHE_DIR", str(data_dir / "whisper-models"))
     )
+    acuifero_node_model_path = Path(
+        os.environ.get(
+            "ACUIFERO_NODE_MODEL_PATH",
+            str(data_dir / "models" / "gemma-4-E2B-it.litertlm"),
+        )
+    )
+    acuifero_node_cache_dir = Path(
+        os.environ.get(
+            "ACUIFERO_NODE_CACHE_DIR",
+            str(data_dir / "litert-cache"),
+        )
+    )
     acuifero_multimodal_enabled_default = _as_bool("ACUIFERO_MULTIMODAL_ENABLED", not is_raspberry_profile)
 
     return Settings(
@@ -97,6 +116,21 @@ def get_settings() -> Settings:
         llm_model=os.environ.get("ACUIFERO_LLM_MODEL", "gemma4:e2b"),
         llm_api_key=os.environ.get("ACUIFERO_LLM_API_KEY", "ollama"),
         llm_timeout_seconds=float(os.environ.get("ACUIFERO_LLM_TIMEOUT_SECONDS", "30")),
+        acuifero_node_provider=os.environ.get("ACUIFERO_NODE_PROVIDER", "litert").strip().lower(),
+        acuifero_node_model_path=acuifero_node_model_path,
+        acuifero_node_backend=os.environ.get("ACUIFERO_NODE_BACKEND", "cpu").strip().lower(),
+        acuifero_node_vision_backend=os.environ.get(
+            "ACUIFERO_NODE_VISION_BACKEND",
+            os.environ.get("ACUIFERO_NODE_BACKEND", "cpu"),
+        ).strip().lower(),
+        acuifero_node_enable_speculative_decoding=_as_bool(
+            "ACUIFERO_NODE_ENABLE_SPECULATIVE_DECODING",
+            False,
+        ),
+        acuifero_node_cache_dir=acuifero_node_cache_dir,
+        acuifero_node_max_output_tokens=int(
+            os.environ.get("ACUIFERO_NODE_MAX_OUTPUT_TOKENS", "256")
+        ),
         acuifero_multimodal_enabled=acuifero_multimodal_enabled_default,
         acuifero_multimodal_verifier_enabled=_as_bool(
             "ACUIFERO_MULTIMODAL_VERIFIER_ENABLED",
@@ -108,7 +142,7 @@ def get_settings() -> Settings:
         ),
         acuifero_multimodal_model=os.environ.get(
             "ACUIFERO_MULTIMODAL_MODEL",
-            os.environ.get("ACUIFERO_LLM_MODEL", "gemma4:e2b"),
+            acuifero_node_model_path.name,
         ),
         acuifero_multimodal_min_interval_seconds=int(
             os.environ.get("ACUIFERO_MULTIMODAL_MIN_INTERVAL_SECONDS", "300")

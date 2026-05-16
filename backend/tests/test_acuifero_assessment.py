@@ -15,6 +15,7 @@ from acuifero_vigia.services.acuifero_assessment import (
     EvidenceFrame,
     TemporalEvidenceBuilder,
     TemporalEvidencePack,
+    _run_ffmpeg_extract,
 )
 
 
@@ -74,6 +75,62 @@ def test_multimodal_evidence_builder_curates_image(tmp_path: Path):
     assert trace
 
 
+def test_ffmpeg_extract_uses_png_sequence(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+    video_path = tmp_path / "sample.mp4"
+    video_path.write_bytes(b"video")
+    output_dir = tmp_path / "frames"
+    output_dir.mkdir()
+    captured: list[str] = []
+
+    class Result:
+        returncode = 0
+        stderr = ""
+        stdout = ""
+
+    def fake_run(command, capture_output, text, check):
+        captured.extend(command)
+        (output_dir / "acuifero-frame-001.png").write_bytes(b"png")
+        return Result()
+
+    monkeypatch.setattr("acuifero_vigia.services.acuifero_assessment.shutil.which", lambda _value: "/usr/bin/ffmpeg")
+    monkeypatch.setattr("acuifero_vigia.services.acuifero_assessment.subprocess.run", fake_run)
+
+    extracted = _run_ffmpeg_extract(video_path, output_dir, max_frames=1, sample_seconds=15, max_side=512)
+
+    assert extracted == [output_dir / "acuifero-frame-001.png"]
+    assert captured[-1].endswith("acuifero-frame-%03d.png")
+    assert "-q:v" not in captured
+
+
+def test_ffmpeg_extract_falls_back_to_first_frame(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+    video_path = tmp_path / "sample.mp4"
+    video_path.write_bytes(b"video")
+    output_dir = tmp_path / "frames"
+    output_dir.mkdir()
+    commands: list[list[str]] = []
+
+    class Result:
+        returncode = 0
+        stderr = ""
+        stdout = ""
+
+    def fake_run(command, capture_output, text, check):
+        commands.append(list(command))
+        if len(commands) == 2:
+            (output_dir / "acuifero-frame-001.png").write_bytes(b"png")
+        return Result()
+
+    monkeypatch.setattr("acuifero_vigia.services.acuifero_assessment.shutil.which", lambda _value: "/usr/bin/ffmpeg")
+    monkeypatch.setattr("acuifero_vigia.services.acuifero_assessment.subprocess.run", fake_run)
+
+    extracted = _run_ffmpeg_extract(video_path, output_dir, max_frames=1, sample_seconds=300, max_side=512)
+
+    assert extracted == [output_dir / "acuifero-frame-001.png"]
+    assert len(commands) == 2
+    assert any(part.startswith("fps=1/300,") for part in commands[0])
+    assert any(part.startswith("scale=") for part in commands[1])
+
+
 def test_assessment_engine_falls_back_when_runner_unavailable(tmp_path: Path):
     image_path = tmp_path / "synthetic.jpg"
     _build_test_image(image_path)
@@ -94,21 +151,17 @@ def test_assessment_engine_falls_back_when_runner_unavailable(tmp_path: Path):
 def test_ollama_runner_multimodal_mode_parses_json_payload(monkeypatch, tmp_path: Path):
     image_path = tmp_path / "synthetic.jpg"
     _build_test_image(image_path)
-
-    class FakeSettings:
-        llm_enabled = True
-        llm_model = "gemma4:e2b"
-        acuifero_multimodal_enabled = True
-        acuifero_multimodal_model = "gemma4:e2b"
-        acuifero_multimodal_base_url = "http://127.0.0.1:11434/v1"
-        acuifero_multimodal_image_max_side = 512
-        acuifero_multimodal_num_ctx = 1024
-        acuifero_multimodal_num_predict = 192
-        acuifero_multimodal_timeout_seconds = 30
+    monkeypatch.setenv("ACUIFERO_LLM_ENABLED", "true")
+    monkeypatch.setenv("ACUIFERO_MULTIMODAL_ENABLED", "true")
+    monkeypatch.setenv("ACUIFERO_MULTIMODAL_MODEL", "gemma4:e2b")
+    monkeypatch.setenv("ACUIFERO_MULTIMODAL_BASE_URL", "http://127.0.0.1:11434/v1")
+    monkeypatch.setenv("ACUIFERO_MULTIMODAL_IMAGE_MAX_SIDE", "512")
+    monkeypatch.setenv("ACUIFERO_MULTIMODAL_NUM_CTX", "1024")
+    monkeypatch.setenv("ACUIFERO_MULTIMODAL_NUM_PREDICT", "192")
+    monkeypatch.setenv("ACUIFERO_MULTIMODAL_TIMEOUT_SECONDS", "30")
+    settings_module.get_settings.cache_clear()
 
     class FakeLLM:
-        settings = FakeSettings()
-
         @staticmethod
         def _extract_json(content):
             import json

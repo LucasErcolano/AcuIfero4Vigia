@@ -7,9 +7,10 @@ from sqlmodel import SQLModel, Session, select
 
 from acuifero_vigia.adapters.asr import FasterWhisperASRAdapter
 from acuifero_vigia.adapters.image_assessment import GemmaImageAssessmentAdapter
+from acuifero_vigia.adapters.litert_node import LiteRTNodeRuntime
 from acuifero_vigia.adapters.llm import OpenAICompatibleLLM
 from acuifero_vigia.adapters.text_structuring_gemma_fewshot import GemmaFewShotTextStructurer
-from acuifero_vigia.adapters.video_assessment import OllamaGemmaRunner
+from acuifero_vigia.adapters.video_assessment import LiteRTGemmaRunner
 from acuifero_vigia.models.domain import SyncQueueItem
 from acuifero_vigia.services.acuifero_assessment import AcuiferoAssessmentEngine, TemporalEvidenceBuilder
 from acuifero_vigia.services.external_data import ExternalDataService
@@ -17,12 +18,14 @@ from acuifero_vigia.services.external_data import ExternalDataService
 
 llm_client = OpenAICompatibleLLM()
 text_structurer = GemmaFewShotTextStructurer(llm_client)
+acuifero_node_runtime = LiteRTNodeRuntime()
+acuifero_image_assessor = GemmaImageAssessmentAdapter(runtime=acuifero_node_runtime, force_embedded=True)
 image_assessor = GemmaImageAssessmentAdapter()
 asr_client = FasterWhisperASRAdapter()
 external_data_service = ExternalDataService()
 acuifero_engine = AcuiferoAssessmentEngine(
     builder=TemporalEvidenceBuilder(),
-    runner=OllamaGemmaRunner(llm_client),
+    runner=LiteRTGemmaRunner(acuifero_node_runtime),
 )
 
 is_online = True

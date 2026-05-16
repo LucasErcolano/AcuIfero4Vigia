@@ -14,8 +14,8 @@ FastAPI service for the Acuifero 4 + Vigia backend.
 
 ## Runtime defaults
 
-The fixed Acuifero node defaults to a Raspberry Pi 8 GB multimodal demo profile and a local
-Ollama-compatible endpoint:
+The fixed Acuifero node now defaults to a Raspberry Pi 8 GB multimodal demo profile and an
+embedded LiteRT-LM runtime:
 
 Install system ffmpeg before running video capture or sample-clip analysis:
 
@@ -26,13 +26,16 @@ sudo apt-get install -y ffmpeg
 ```bash
 ACUIFERO_NODE_PROFILE=raspberry-pi-8gb-multimodal-demo
 ACUIFERO_DATA_DIR=/mnt/acuifero/data
-ACUIFERO_LLM_BASE_URL=http://127.0.0.1:11434/v1
-ACUIFERO_LLM_MODEL=gemma4:e2b
-ACUIFERO_LLM_API_KEY=ollama
+ACUIFERO_NODE_PROVIDER=litert
+ACUIFERO_NODE_MODEL_PATH=backend/data/models/gemma-4-E2B-it.litertlm
+ACUIFERO_NODE_BACKEND=gpu
+ACUIFERO_NODE_VISION_BACKEND=gpu
+ACUIFERO_NODE_CACHE_DIR=backend/data/litert-cache
+ACUIFERO_NODE_ENABLE_SPECULATIVE_DECODING=false
+ACUIFERO_NODE_MAX_OUTPUT_TOKENS=256
 ACUIFERO_MULTIMODAL_ENABLED=true
 ACUIFERO_MULTIMODAL_VERIFIER_ENABLED=false
-ACUIFERO_MULTIMODAL_BASE_URL=http://127.0.0.1:11434/v1
-ACUIFERO_MULTIMODAL_MODEL=gemma4:e2b
+ACUIFERO_MULTIMODAL_MODEL=gemma-4-E2B-it.litertlm
 ACUIFERO_MULTIMODAL_MAX_FRAMES=1
 ACUIFERO_MULTIMODAL_FRAME_SAMPLE_SECONDS=300
 ACUIFERO_MULTIMODAL_IMAGE_MAX_SIDE=512
@@ -41,11 +44,24 @@ ACUIFERO_MAX_CURATED_FRAMES=1
 ACUIFERO_ARTIFACT_RETENTION_DAYS=3
 ```
 
-For this profile, Acuifero sends one optimized frame to Gemma 4 multimodal and
-lets the model perform the visual interpretation. The Raspberry Pi 16 GB /
-workstation profile uses the same path with more frames and context through
+For this profile, Acuifero prepares one optimized frame and attempts Gemma 4
+multimodal through LiteRT-LM. On the measured Raspberry Pi 5 setup in this
+branch, text smoke inference works with `gpu`, but vision still fails on the
+software WebGPU stack and the node path falls back conservatively. Non-green
+reasoning also falls back today because the longer LiteRT text decode path is
+not yet stable on this device. The Raspberry Pi 16 GB / workstation profile
+uses the same path with more frames and context through
 `../scripts/run_acuifero_pi16_multimodal_prod.sh`. Vigia is treated as a
-separate user/volunteer node and is not sized by this Raspberry Pi fixed-node profile.
+separate user/volunteer node and is not sized by this Raspberry Pi fixed-node
+profile.
+
+Download the model once before the first real run:
+
+```bash
+python ../scripts/fetch_litert_model.py
+python ../scripts/fetch_demo_assets.py
+python ../scripts/litert_smoke.py
+```
 
 Use `../scripts/node_guard.py` on the Pi to record short clips from
 `ACUIFERO_CAMERA_SOURCE` and submit them to `/api/node/analyze` on a fixed

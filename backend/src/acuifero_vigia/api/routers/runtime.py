@@ -25,6 +25,7 @@ async def health() -> dict[str, object]:
 async def get_runtime_status() -> RuntimeStatus:
     settings = get_settings()
     llm_status = deps.llm_client.health()
+    acuifero_node_status = deps.acuifero_node_runtime.health()
     hydromet_status = deps.external_data_service.health()
     return RuntimeStatus(
         is_online=deps.is_online,
@@ -37,6 +38,13 @@ async def get_runtime_status() -> RuntimeStatus:
         },
         acuifero={
             "node_profile": settings.acuifero_node_profile,
+            "provider": acuifero_node_status.provider,
+            "backend": acuifero_node_status.backend,
+            "vision_backend": settings.acuifero_node_vision_backend,
+            "engine_ready": acuifero_node_status.reachable,
+            "engine_detail": acuifero_node_status.detail,
+            "model_path": acuifero_node_status.model_path,
+            "cache_dir": str(settings.acuifero_node_cache_dir),
             "data_dir": str(settings.data_dir),
             "ffmpeg_bin": settings.ffmpeg_bin,
             "multimodal_enabled": settings.acuifero_multimodal_enabled,

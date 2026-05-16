@@ -8,7 +8,12 @@ from typing import Any
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlmodel import Session, desc, select
 
-from acuifero_vigia.api.deps import acuifero_engine, enqueue_entity, image_assessor, llm_client
+from acuifero_vigia.api.deps import (
+    acuifero_engine,
+    acuifero_image_assessor,
+    acuifero_node_runtime,
+    enqueue_entity,
+)
 from acuifero_vigia.api.serializers import serialize_observation
 from acuifero_vigia.core.settings import get_settings
 from acuifero_vigia.db.database import get_session
@@ -122,7 +127,7 @@ def create_node_observation(
             or Path(assessment.evidence_pack.evidence_frame_path)
         )
         try:
-            image_summary = image_assessor.assess(frame_path)
+            image_summary = acuifero_image_assessor.assess(frame_path)
         except Exception:
             image_summary = None
         if image_summary is None:
@@ -172,7 +177,7 @@ def create_node_observation(
     session.flush()
     enqueue_entity(session, "node_observation", observation)
 
-    alert = recompute_site_alert(session, site_id, llm_client)
+    alert = recompute_site_alert(session, site_id, acuifero_node_runtime)
     session.flush()
     enqueue_entity(session, "fused_alert", alert)
     if alert.incident_id is not None:
@@ -225,7 +230,7 @@ async def explain_frame(frame: UploadFile = File(...)) -> dict[str, Any]:
     path = persist_upload(frame, "frame")
     if not path:
         raise HTTPException(status_code=400, detail="frame upload failed")
-    assessment = image_assessor.assess(path)
+    assessment = acuifero_image_assessor.assess(path)
     if assessment is None:
         raise HTTPException(status_code=503, detail="Image assessment unavailable (LLM down or invalid output)")
     return {

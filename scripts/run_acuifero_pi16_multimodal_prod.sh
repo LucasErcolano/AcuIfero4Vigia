@@ -8,6 +8,13 @@ PORT="${ACUIFERO_API_PORT:-8000}"
 
 export ACUIFERO_NODE_PROFILE="${ACUIFERO_NODE_PROFILE:-raspberry-pi-16gb-multimodal-prod}"
 export ACUIFERO_DATA_DIR="${ACUIFERO_DATA_DIR:-/mnt/acuifero/data}"
+export ACUIFERO_NODE_PROVIDER="${ACUIFERO_NODE_PROVIDER:-litert}"
+export ACUIFERO_NODE_MODEL_PATH="${ACUIFERO_NODE_MODEL_PATH:-$BACKEND_DIR/data/models/gemma-4-E2B-it.litertlm}"
+export ACUIFERO_NODE_BACKEND="${ACUIFERO_NODE_BACKEND:-gpu}"
+export ACUIFERO_NODE_VISION_BACKEND="${ACUIFERO_NODE_VISION_BACKEND:-gpu}"
+export ACUIFERO_NODE_CACHE_DIR="${ACUIFERO_NODE_CACHE_DIR:-$BACKEND_DIR/data/litert-cache}"
+export ACUIFERO_NODE_ENABLE_SPECULATIVE_DECODING="${ACUIFERO_NODE_ENABLE_SPECULATIVE_DECODING:-false}"
+export ACUIFERO_NODE_MAX_OUTPUT_TOKENS="${ACUIFERO_NODE_MAX_OUTPUT_TOKENS:-256}"
 export ACUIFERO_LLM_ENABLED="${ACUIFERO_LLM_ENABLED:-true}"
 export ACUIFERO_LLM_BASE_URL="${ACUIFERO_LLM_BASE_URL:-http://127.0.0.1:11434/v1}"
 export ACUIFERO_LLM_MODEL="${ACUIFERO_LLM_MODEL:-gemma4:e2b}"
@@ -27,13 +34,16 @@ export ACUIFERO_MULTIMODAL_TIMEOUT_SECONDS="${ACUIFERO_MULTIMODAL_TIMEOUT_SECOND
 export ACUIFERO_MAX_CURATED_FRAMES="${ACUIFERO_MAX_CURATED_FRAMES:-4}"
 export ACUIFERO_ARTIFACT_RETENTION_DAYS="${ACUIFERO_ARTIFACT_RETENTION_DAYS:-14}"
 
-"$ROOT_DIR/scripts/run_gemma_local.sh" "$ACUIFERO_MULTIMODAL_MODEL"
-
 cd "$BACKEND_DIR"
 if [[ -d ".venv" ]]; then
   # shellcheck disable=SC1091
   source ".venv/bin/activate"
+else
+  echo "Missing backend virtualenv at $BACKEND_DIR/.venv" >&2
+  exit 1
 fi
 
+python3 "$ROOT_DIR/scripts/fetch_litert_model.py"
+python3 "$ROOT_DIR/scripts/fetch_demo_assets.py"
 PYTHONPATH=src python3 -m acuifero_vigia.scripts.seed
 PYTHONPATH=src python3 -m uvicorn acuifero_vigia.main:app --host "$HOST" --port "$PORT"

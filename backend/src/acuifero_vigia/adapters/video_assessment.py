@@ -7,6 +7,7 @@ from typing import Any
 import httpx
 
 from acuifero_vigia.adapters.image_assessment import _encode_image
+from acuifero_vigia.adapters.litert_node import LiteRTNodeRuntime
 from acuifero_vigia.adapters.llm import OpenAICompatibleLLM
 from acuifero_vigia.core.settings import get_settings
 from acuifero_vigia.services.acuifero_assessment import AssessmentVerdict, TemporalEvidencePack
@@ -181,5 +182,30 @@ class OllamaGemmaRunner:
 
 
 class LiteRTGemmaRunner:
+    def __init__(self, runtime: LiteRTNodeRuntime) -> None:
+        self.runtime = runtime
+        self.settings = get_settings()
+
     def assess(self, pack: TemporalEvidencePack) -> AssessmentVerdict | None:
-        return None
+        if self.settings.acuifero_node_provider != "litert":
+            return None
+        image_paths = [
+            Path(frame.frame_path)
+            for frame in pack.selected_frames
+            if Path(frame.frame_path).exists()
+        ]
+        if not image_paths:
+            return None
+        payload = self.runtime.generate_multimodal_json(
+            SYSTEM_PROMPT,
+            OllamaGemmaRunner._build_user_prompt(pack),
+            image_paths,
+            max_tokens=min(512, self.settings.acuifero_node_max_output_tokens),
+        )
+        if not isinstance(payload, dict):
+            return None
+        return _normalize_verdict_payload(
+            payload,
+            runner_name=self.runtime.model_name,
+            runner_mode="litert-multimodal-temporal",
+        )
