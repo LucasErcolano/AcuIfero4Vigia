@@ -105,10 +105,12 @@ Production Acuifero node env on Raspberry Pi 8 GB:
 
 - use LiteRT-LM with the upstream `gemma-4-E2B-it.litertlm` artifact
 - keep `ACUIFERO_NODE_PROVIDER=litert`
-- keep `ACUIFERO_NODE_BACKEND=gpu`
-- keep `ACUIFERO_NODE_VISION_BACKEND=gpu`
+- keep `ACUIFERO_NODE_BACKEND=gpu` for text/reasoning smoke checks
+- keep `ACUIFERO_NODE_MULTIMODAL_BACKEND=cpu`
+- keep `ACUIFERO_NODE_MULTIMODAL_VISION_BACKEND=cpu`
 - keep `ACUIFERO_NODE_ENABLE_SPECULATIVE_DECODING=true`
 - keep `ACUIFERO_NODE_MAX_OUTPUT_TOKENS=1024`
+- keep `ACUIFERO_NODE_MULTIMODAL_MAX_OUTPUT_TOKENS=2048`
 - keep `ACUIFERO_MULTIMODAL_ENABLED=true`
 - keep `ACUIFERO_MULTIMODAL_MAX_FRAMES=1`
 - keep `ACUIFERO_MULTIMODAL_IMAGE_MAX_SIDE=512`
@@ -118,15 +120,15 @@ Production Acuifero node env on Raspberry Pi 8 GB:
 Measured Pi 5 status on this branch:
 
 - LiteRT text smoke inference works with `backend=gpu`
-- LiteRT text and reasoning smokes work with speculative decoding enabled on the
-  Windows verification machine for this branch
-- LiteRT `backend=cpu` fails during engine creation on this device/runtime
-- Gemma 4 E2B vision inference still fails on Pi 5 because the WebGPU path lands on
-  Mesa `llvmpipe` and exhausts the available buffer budget
-- non-green alert reasoning still falls back deterministically on this Pi because
-  the real LiteRT text decode path times out or aborts on the longer reasoning prompt
-- today the fixed-node sample flow reaches `multimodal-unavailable-fallback` on this
-  exact Pi/model combination
+- LiteRT one-image smoke inference works on the Pi with
+  `ACUIFERO_NODE_BACKEND=cpu`,
+  `ACUIFERO_NODE_MULTIMODAL_VISION_BACKEND=cpu`,
+  `ACUIFERO_NODE_MULTIMODAL_MAX_OUTPUT_TOKENS=2048`, and speculative decoding
+  enabled
+- the GPU vision path fails on Pi 5 because the WebGPU path lands on Mesa
+  `llvmpipe` and exhausts the available buffer budget
+- the current Pi profile therefore keeps text/reasoning on GPU and uses a
+  CPU-only LiteRT engine for multimodal image inference
 
 For local development only, Acuifero can also be forced onto the old Ollama
 path with `ACUIFERO_NODE_PROVIDER=ollama`. That mode is not a production Pi
@@ -303,7 +305,7 @@ curl -sf -X POST http://127.0.0.1:8000/api/reports \
 
 Expected on a healthy setup:
 
-- `/api/settings/runtime` returns `acuifero.provider=litert`, `acuifero.backend=gpu`, `acuifero.speculative_decoding=true`, `acuifero.engine_ready=true`, `acuifero.counts_for_p1=true`, `acuifero.model_path`, `acuifero.node_profile=raspberry-pi-8gb-multimodal-demo`, and `acuifero.multimodal_enabled=true`
+- `/api/settings/runtime` returns `acuifero.provider=litert`, `acuifero.backend=gpu`, `acuifero.multimodal_backend=cpu`, `acuifero.multimodal_vision_backend=cpu`, `acuifero.speculative_decoding=true`, `acuifero.engine_ready=true`, `acuifero.counts_for_p1=true`, `acuifero.model_path`, `acuifero.node_profile=raspberry-pi-8gb-multimodal-demo`, and `acuifero.multimodal_enabled=true`
 - sample-node analysis returns `frames_analyzed>=1`, `assessment_mode=gemma4-multimodal-v1`, and a populated `runner.mode`
 - report submission returns `200 OK` and creates a fused red alert for the sample site
 
@@ -349,4 +351,4 @@ cd frontend && npm run lint
 - The temporal evidence builder is still tuned for fixed cameras with stable framing; moving cameras are out of scope.
 - The fixed-node runtime now targets LiteRT-LM via the Python API; the generic upstream artifact wired here is `gemma-4-E2B-it.litertlm`.
 - Hydromet data is real but model-based; it is not a replacement for a local gauging station.
-- Raspberry Pi 8 GB remains a constrained profile, so the default path keeps a single curated frame while favoring the LiteRT GPU backend with speculative decoding.
+- Raspberry Pi 8 GB remains a constrained profile, so the default path keeps a single curated frame, uses GPU for text/reasoning checks, and uses CPU for LiteRT multimodal image inference with speculative decoding enabled.

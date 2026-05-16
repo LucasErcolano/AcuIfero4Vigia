@@ -29,10 +29,12 @@ ACUIFERO_DATA_DIR=/mnt/acuifero/data
 ACUIFERO_NODE_PROVIDER=litert
 ACUIFERO_NODE_MODEL_PATH=backend/data/models/gemma-4-E2B-it.litertlm
 ACUIFERO_NODE_BACKEND=gpu
-ACUIFERO_NODE_VISION_BACKEND=gpu
+ACUIFERO_NODE_MULTIMODAL_BACKEND=cpu
+ACUIFERO_NODE_MULTIMODAL_VISION_BACKEND=cpu
 ACUIFERO_NODE_CACHE_DIR=backend/data/litert-cache
 ACUIFERO_NODE_ENABLE_SPECULATIVE_DECODING=true
 ACUIFERO_NODE_MAX_OUTPUT_TOKENS=1024
+ACUIFERO_NODE_MULTIMODAL_MAX_OUTPUT_TOKENS=2048
 ACUIFERO_MULTIMODAL_ENABLED=true
 ACUIFERO_MULTIMODAL_VERIFIER_ENABLED=false
 ACUIFERO_MULTIMODAL_MODEL=gemma-4-E2B-it.litertlm
@@ -47,11 +49,11 @@ ACUIFERO_ARTIFACT_RETENTION_DAYS=3
 For this profile, Acuifero prepares one optimized frame and attempts Gemma 4
 multimodal through LiteRT-LM. On the measured Raspberry Pi 5 setup in this
 branch, text and reasoning smoke inference work with `gpu` and speculative
-decoding enabled. The simple one-image smoke needs at least a 512-token engine
-budget, and the full temporal node-analysis prompt needs a 1024-token budget;
-with 256 or 512 tokens those paths can fail before inference because the image
-prompt exceeds the token cap. On the measured Raspberry Pi 5, vision still
-fails on the software WebGPU stack and the node path falls back conservatively.
+decoding enabled. The GPU vision path fails on the software WebGPU stack, but
+one-image LiteRT multimodal smoke succeeds on the Pi with the CPU multimodal
+engine and a 2048-token engine budget. With 1024 or fewer multimodal tokens the
+image path can fail before inference because the vision patches exceed the
+token cap.
 The Raspberry Pi 16 GB / workstation profile
 uses the same path with more frames and context through
 `../scripts/run_acuifero_pi16_multimodal_prod.sh`. Vigia is treated as a

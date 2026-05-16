@@ -196,8 +196,11 @@ def test_runtime_status_exposes_litert_p1_fields(monkeypatch: pytest.MonkeyPatch
 
     assert status.acuifero["provider"] == "litert"
     assert status.acuifero["backend"] == "gpu"
+    assert status.acuifero["multimodal_backend"] == "cpu"
+    assert status.acuifero["multimodal_vision_backend"] == "cpu"
     assert status.acuifero["speculative_decoding"] is True
     assert status.acuifero["max_output_tokens"] == 1024
+    assert status.acuifero["multimodal_max_output_tokens"] == 2048
     assert status.acuifero["engine_ready"] is True
     assert status.acuifero["counts_for_p1"] is True
 
@@ -226,6 +229,8 @@ def test_productive_scripts_keep_litert_gpu_speculative_defaults():
         text = script_path.read_text(encoding="utf-8")
         assert 'ACUIFERO_NODE_PROVIDER="${ACUIFERO_NODE_PROVIDER:-litert}"' in text
         assert 'ACUIFERO_NODE_BACKEND="${ACUIFERO_NODE_BACKEND:-gpu}"' in text
-        assert 'ACUIFERO_NODE_VISION_BACKEND="${ACUIFERO_NODE_VISION_BACKEND:-gpu}"' in text
+        assert 'ACUIFERO_NODE_MULTIMODAL_BACKEND="${ACUIFERO_NODE_MULTIMODAL_BACKEND:-cpu}"' in text
+        assert 'ACUIFERO_NODE_MULTIMODAL_VISION_BACKEND="${ACUIFERO_NODE_MULTIMODAL_VISION_BACKEND:-cpu}"' in text
         assert 'ACUIFERO_NODE_ENABLE_SPECULATIVE_DECODING="${ACUIFERO_NODE_ENABLE_SPECULATIVE_DECODING:-true}"' in text
         assert 'ACUIFERO_NODE_MAX_OUTPUT_TOKENS="${ACUIFERO_NODE_MAX_OUTPUT_TOKENS:-1024}"' in text
+        assert 'ACUIFERO_NODE_MULTIMODAL_MAX_OUTPUT_TOKENS="${ACUIFERO_NODE_MULTIMODAL_MAX_OUTPUT_TOKENS:-2048}"' in text

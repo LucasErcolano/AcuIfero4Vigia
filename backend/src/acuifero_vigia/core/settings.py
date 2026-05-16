@@ -32,9 +32,12 @@ class Settings:
     acuifero_node_model_path: Path
     acuifero_node_backend: str
     acuifero_node_vision_backend: str
+    acuifero_node_multimodal_backend: str
+    acuifero_node_multimodal_vision_backend: str
     acuifero_node_enable_speculative_decoding: bool
     acuifero_node_cache_dir: Path
     acuifero_node_max_output_tokens: int
+    acuifero_node_multimodal_max_output_tokens: int
     acuifero_multimodal_enabled: bool
     acuifero_multimodal_verifier_enabled: bool
     acuifero_multimodal_base_url: str
@@ -123,6 +126,14 @@ def get_settings() -> Settings:
             "ACUIFERO_NODE_VISION_BACKEND",
             os.environ.get("ACUIFERO_NODE_BACKEND", "gpu"),
         ).strip().lower(),
+        acuifero_node_multimodal_backend=os.environ.get(
+            "ACUIFERO_NODE_MULTIMODAL_BACKEND",
+            "cpu",
+        ).strip().lower(),
+        acuifero_node_multimodal_vision_backend=os.environ.get(
+            "ACUIFERO_NODE_MULTIMODAL_VISION_BACKEND",
+            os.environ.get("ACUIFERO_NODE_MULTIMODAL_BACKEND", "cpu"),
+        ).strip().lower(),
         acuifero_node_enable_speculative_decoding=_as_bool(
             "ACUIFERO_NODE_ENABLE_SPECULATIVE_DECODING",
             True,
@@ -130,6 +141,9 @@ def get_settings() -> Settings:
         acuifero_node_cache_dir=acuifero_node_cache_dir,
         acuifero_node_max_output_tokens=int(
             os.environ.get("ACUIFERO_NODE_MAX_OUTPUT_TOKENS", "1024")
+        ),
+        acuifero_node_multimodal_max_output_tokens=int(
+            os.environ.get("ACUIFERO_NODE_MULTIMODAL_MAX_OUTPUT_TOKENS", "2048")
         ),
         acuifero_multimodal_enabled=acuifero_multimodal_enabled_default,
         acuifero_multimodal_verifier_enabled=_as_bool(

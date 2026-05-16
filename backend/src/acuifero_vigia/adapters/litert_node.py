@@ -151,11 +151,16 @@ class LiteRTNodeRuntime:
             return self._engines[engine_key]
 
         litert_lm = self._import_litert_module()
-        backend_value = self._resolve_backend(litert_lm)
+        backend_value = self._resolve_backend(litert_lm, multimodal=multimodal)
+        max_num_tokens = (
+            self.settings.acuifero_node_multimodal_max_output_tokens
+            if multimodal
+            else self.settings.acuifero_node_max_output_tokens
+        )
         kwargs: dict[str, Any] = {
             "backend": backend_value,
             "cache_dir": str(self.settings.acuifero_node_cache_dir),
-            "max_num_tokens": max(1, int(self.settings.acuifero_node_max_output_tokens)),
+            "max_num_tokens": max(1, int(max_num_tokens)),
             "enable_speculative_decoding": self.settings.acuifero_node_enable_speculative_decoding,
         }
         if multimodal:
@@ -167,13 +172,17 @@ class LiteRTNodeRuntime:
         self._engines[engine_key] = engine
         return engine
 
-    def _resolve_backend(self, litert_lm: Any) -> Any:
-        backend_name = self.settings.acuifero_node_backend.strip().upper()
+    def _resolve_backend(self, litert_lm: Any, *, multimodal: bool = False) -> Any:
+        backend_name = (
+            self.settings.acuifero_node_multimodal_backend
+            if multimodal
+            else self.settings.acuifero_node_backend
+        ).strip().upper()
         backend = getattr(getattr(litert_lm, "Backend"), backend_name)
         return backend
 
     def _resolve_vision_backend(self, litert_lm: Any) -> Any:
-        backend_name = self.settings.acuifero_node_vision_backend.strip().upper()
+        backend_name = self.settings.acuifero_node_multimodal_vision_backend.strip().upper()
         backend = getattr(getattr(litert_lm, "Backend"), backend_name)
         return backend
 
@@ -206,10 +215,18 @@ class LiteRTNodeRuntime:
         if not raw:
             return None
         start = raw.find("{")
-        end = raw.rfind("}")
-        if start == -1 or end == -1 or end < start:
+        if start == -1:
             return None
+        end = raw.rfind("}")
+        if end == -1 or end < start:
+            candidate = raw[start:]
+        else:
+            candidate = raw[start : end + 1]
+        open_braces = candidate.count("{")
+        close_braces = candidate.count("}")
+        if open_braces > close_braces:
+            candidate = f"{candidate}{'}' * (open_braces - close_braces)}"
         try:
-            return json.loads(raw[start : end + 1])
+            return json.loads(candidate)
         except json.JSONDecodeError:
             return None

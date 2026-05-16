@@ -169,6 +169,9 @@ def test_litert_runtime_uses_separate_multimodal_engine(monkeypatch, tmp_path: P
     monkeypatch.setenv("ACUIFERO_NODE_MODEL_PATH", str(model_path))
     monkeypatch.setenv("ACUIFERO_NODE_BACKEND", "gpu")
     monkeypatch.setenv("ACUIFERO_NODE_VISION_BACKEND", "cpu")
+    monkeypatch.setenv("ACUIFERO_NODE_MULTIMODAL_BACKEND", "cpu")
+    monkeypatch.setenv("ACUIFERO_NODE_MULTIMODAL_VISION_BACKEND", "cpu")
+    monkeypatch.setenv("ACUIFERO_NODE_MULTIMODAL_MAX_OUTPUT_TOKENS", "2048")
 
     from acuifero_vigia.adapters.litert_node import LiteRTNodeRuntime
 
@@ -209,9 +212,11 @@ def test_litert_runtime_uses_separate_multimodal_engine(monkeypatch, tmp_path: P
     runtime.generate_multimodal_json("system prompt", "user prompt", [image_path])
 
     assert calls[0]["kwargs"]["backend"] == "gpu"
+    assert calls[0]["kwargs"]["max_num_tokens"] == 1024
     assert "vision_backend" not in calls[0]["kwargs"]
-    assert calls[1]["kwargs"]["backend"] == "gpu"
+    assert calls[1]["kwargs"]["backend"] == "cpu"
     assert calls[1]["kwargs"]["vision_backend"] == "cpu"
+    assert calls[1]["kwargs"]["max_num_tokens"] == 2048
 
 
 def test_litert_runtime_honors_speculative_decoding_override(monkeypatch, tmp_path: Path):
@@ -261,6 +266,22 @@ def test_litert_runtime_honors_speculative_decoding_override(monkeypatch, tmp_pa
     assert runtime.generate_text("system prompt", "user prompt") == "ok"
     assert calls[0]["backend"] == "gpu"
     assert calls[0]["enable_speculative_decoding"] is False
+
+
+def test_litert_runtime_repairs_truncated_json_object():
+    from acuifero_vigia.adapters.litert_node import LiteRTNodeRuntime
+
+    raw = (
+        '{"assessment_level":"green",'
+        '"critical_evidence":{"confidence":0.8}'
+    )
+
+    parsed = LiteRTNodeRuntime._extract_json(raw)
+
+    assert parsed == {
+        "assessment_level": "green",
+        "critical_evidence": {"confidence": 0.8},
+    }
 
 
 def test_litert_runtime_returns_none_when_dependency_is_missing(monkeypatch, tmp_path: Path):
