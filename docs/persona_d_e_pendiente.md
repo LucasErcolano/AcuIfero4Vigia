@@ -51,6 +51,40 @@ Todos estos archivos ya están commiteados en branch `chore/repo-polish-complian
 
 Ordenadas por prioridad temporal. Empezar de arriba hacia abajo.
 
+### Stack operativo D+E
+
+Usar el video como cadena de agentes con entregables verificables:
+
+1. `docs/hackathon/video/DESIGN.md` es el contrato visual/editorial.
+2. HyperFrames produce motion graphics: mapas, arquitectura edge, paneles JSON,
+   alert trail y escenas wifi off -> sync.
+3. Playwright produce screencasts reproducibles de dashboard/demo.
+4. Veo/Flow/Nano Banana pueden producir B-roll/stills ilustrativos, nunca evidencia.
+5. ElevenLabs Scribe v2 produce timestamps; `whisper-timestamped` es fallback local.
+6. `video-use` ensambla `preview.mp4`, `final.mp4`, `edl.json`, subtitulos y notas QC.
+7. FFmpeg hace export, cortes, overlays, mix de audio, subtitulos quemados si hace falta y QC reproducible.
+8. Brainiac puede hacer QA visual experimental interno sobre `preview.mp4`; no hacer claims de neurociencia.
+
+Roles y handoffs:
+
+```
+docs/hackathon/video/roles/
+  director.md
+  visual_designer.md
+  renderer_hyperframes.md
+  screencast_operator.md
+  editor.md
+  claims_auditor.md
+
+docs/hackathon/video/handoffs/
+  01_script.md
+  02_shot_plan.md
+  03_scene_manifest.json
+  04_edit_decisions.json
+  05_subtitles.ass
+  06_claims_qc.md
+```
+
 ---
 
 ### TAREA 1 — Filmar talking-head (HOY, ~1h, sin dependencias)

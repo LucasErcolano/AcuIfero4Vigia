@@ -12,12 +12,12 @@ Inputs in `../raw/`:
 - broll_airplane_mode_toggle.mp4
 - screencast_node_analysis.mp4
 - screencast_wifi_off_to_sync.mp4
-- hf_vigia_input_to_json.mp4
+- hf_vigia.mp4
 - hf_evidence_pack.mp4
-- hf_alert_reasoning_chain.mp4
+- hf_reasoning_chain.mp4
 - hf_sinagir_export.mp4
 - hf_litoral_map.mp4
-- end_card.mp4
+- hf_end_card.mp4
 - narration.wav
 - music_bed.wav
 - sfx_siren_short.wav

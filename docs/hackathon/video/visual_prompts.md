@@ -66,9 +66,9 @@ the frame, ambient feel, 16:9, 8 seconds.
 
 ## HyperFrames-rendered scenes (for reference, NOT image prompts)
 
-- `hf_vigia_input_to_json.mp4` ← `ui_scenes/02_volunteer_report_input.html` and `03_volunteer_report_json.html`
+- `hf_vigia.mp4` <- `ui_scenes/02_volunteer_report_input.html` and `03_volunteer_report_json.html`
 - `hf_evidence_pack.mp4` ← `ui_scenes/04_fixed_node_evidence_pack.html`
-- `hf_alert_reasoning_chain.mp4` ← `ui_scenes/05_alert_reasoning_chain.html`
+- `hf_reasoning_chain.mp4` <- `ui_scenes/05_alert_reasoning_chain.html`
 - `hf_sinagir_export.mp4` ← `ui_scenes/06_sinagir_export.html`
 - `hf_litoral_map.mp4` ← `ui_scenes/07_offline_queue.html` is the queue; the map will be a separate HF composition (see `hyperframes/litoral_map.md` to be authored).
 

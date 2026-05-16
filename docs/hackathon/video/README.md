@@ -3,6 +3,34 @@
 Self-contained production package for the Gemma 4 Good Hackathon pitch.
 Framing: **MVP demo, not benchmark video.**
 
+## Production stack
+
+- `DESIGN.md` is the single visual/editorial contract for all agents.
+- HyperFrames renders programmatic motion graphics: maps, edge architecture,
+  JSON panels, alert trail, and wifi off -> sync scenes.
+- Playwright + FFmpeg captures reproducible product screencasts.
+- Veo/Flow/Nano Banana assets are illustrative support only, never evidence.
+- ElevenLabs Scribe v2 is the default timestamping path; `whisper-timestamped`
+  is the offline fallback.
+- `video-use` assembles `preview.mp4`, `final.mp4`, `edl.json`, subtitles, and
+  QC notes.
+- Brainiac QA is optional internal thumbnail/visual-dip review. Do not make
+  neuroscience claims.
+- FFmpeg owns reproducible exports, cuts, overlays, audio mix, and subtitle burn.
+
+## Agent chain
+
+Use bounded roles with checkable handoffs:
+
+- `roles/director.md`
+- `roles/visual_designer.md`
+- `roles/renderer_hyperframes.md`
+- `roles/screencast_operator.md`
+- `roles/editor.md`
+- `roles/claims_auditor.md`
+
+Handoffs live in `handoffs/01_script.md` through `handoffs/06_claims_qc.md`.
+
 ## Layout
 
 ```

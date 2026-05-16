@@ -58,6 +58,14 @@ def _normalize_verdict_payload(
 
     score = max(0.0, min(1.0, score))
     level = str(payload.get("assessment_level", "")).strip().lower()
+    level_aliases = {
+        "low": "green",
+        "medium": "yellow",
+        "moderate": "yellow",
+        "high": "orange",
+        "critical": "red",
+    }
+    level = level_aliases.get(level, level)
     if level not in {"green", "yellow", "orange", "red"}:
         level = _level_from_score(score)
 
@@ -115,6 +123,9 @@ class OllamaGemmaRunner:
             "model": self.settings.acuifero_multimodal_model,
             "stream": False,
             "format": "json",
+            # Gemma 4 routes output into message.thinking by default; disable it
+            # so the requested JSON lands in message.content.
+            "think": False,
             "messages": [
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {
@@ -126,7 +137,7 @@ class OllamaGemmaRunner:
             "options": {
                 "temperature": 0.1,
                 "num_ctx": self.settings.acuifero_multimodal_num_ctx,
-                "num_predict": min(512, self.settings.acuifero_multimodal_num_predict),
+                "num_predict": max(512, self.settings.acuifero_multimodal_num_predict),
             },
         }
         try:
@@ -134,7 +145,8 @@ class OllamaGemmaRunner:
                 response = client.post(self._multimodal_ollama_chat_url(), json=payload)
                 response.raise_for_status()
             body = response.json()
-            content = body.get("message", {}).get("content", "")
+            message = body.get("message", {})
+            content = message.get("content") or message.get("thinking") or ""
         except Exception:
             return None
 
