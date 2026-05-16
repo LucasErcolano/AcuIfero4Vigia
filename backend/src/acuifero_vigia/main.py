@@ -23,7 +23,7 @@ from acuifero_vigia.api.routers.sync import flush_sync
 from acuifero_vigia.api.routers.vigia import create_report, get_reports
 from acuifero_vigia.db.database import init_db
 from acuifero_vigia.services.storage import get_fixture_dir, get_upload_dir
-from acuifero_vigia.api.routers import acuifero, alerts, runtime, sites, sync, vigia
+from acuifero_vigia.api.routers import acuifero, alerts, cap, runtime, sites, sync, vigia
 
 
 @asynccontextmanager
@@ -54,8 +54,11 @@ for router in (
     vigia.router,
     alerts.router,
     sync.router,
+    cap.router,
 ):
     app.include_router(router, prefix="/api")
+
+app.include_router(cap.router)
 
 
 # Backward-compatible aliases for older tests/scripts that import from main.py.

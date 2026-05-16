@@ -90,7 +90,7 @@ def _normalize_verdict_payload(
 class OllamaGemmaRunner:
     def __init__(self, llm: OpenAICompatibleLLM) -> None:
         self.llm = llm
-        self.settings = get_settings()
+        self.settings = getattr(llm, "settings", get_settings())
 
     def assess(self, pack: TemporalEvidencePack) -> AssessmentVerdict | None:
         if not self.settings.llm_enabled:

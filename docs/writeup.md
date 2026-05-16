@@ -68,6 +68,7 @@ payload taggeado con el schema oficial mapeado campo por campo. No se
 reclama compliance certificada; se posiciona como *fuente de deteccion
 complementaria* que notifica a Defensa Civil municipal, no como emisor
 oficial al publico general (ver seccion 8).
+<!-- Persona C flag: este endpoint exporta SINAGIR-ready JSON. CAP XML v1.2 ahora sale por POST /cap/emit y /api/cap/emit; conviene nombrar ambos para no mezclar JSON SINAGIR con CAP XML. -->
 
 ## 3. Por que Gemma 4
 
@@ -90,6 +91,7 @@ por una CNN + reglas:
   `critical_evidence`).
 - **Function calling y JSON estructurado.** El voluntario habla
   rioplatense; Gemma devuelve JSON normalizado a enums SINAGIR.
+  <!-- Persona C flag: el backend valida tool calls estrictos para trigger_siren/emit_cap/send_lora; no todos los JSON del voluntario son enums SINAGIR, varios son enums operativos internos. -->
 - **Latencia compatible con emergencias.** Sub-12 s objetivo combinado
   texto+imagen en mid-range Android (cold load incluido); sub-segundo
   por inferencia warm en Pi 8 GB demo (un frame, `IMAGE_MAX_SIDE=512`,
