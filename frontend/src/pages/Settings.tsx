@@ -64,6 +64,13 @@ export default function Settings() {
     loadRuntime();
   }, []);
 
+  const acuiferoReadyLabel = runtime?.acuifero?.provider === 'ollama'
+    ? 'Ollama dev runtime ready'
+    : 'LiteRT runtime ready';
+  const acuiferoNotReadyLabel = runtime?.acuifero?.provider === 'ollama'
+    ? 'Ollama dev runtime not ready'
+    : 'LiteRT runtime not ready';
+
   return (
     <div className="space-y-6 pb-20">
       <div>
@@ -120,8 +127,8 @@ export default function Settings() {
         <h3 className="font-semibold text-gray-900">Acuifero fixed-node setup</h3>
         <p className="text-sm text-gray-600">
           The fixed Acuifero node now targets an embedded LiteRT-LM runtime with Gemma 4 E2B. The Pi 8 profile is a minimum
-          demo with one small frame every few minutes; the Pi 16/prod profile uses more frames and context. Ollama remains a
-          separate dev/runtime path for Vigia and local experimentation.
+          demo with one small frame every few minutes; the Pi 16/prod profile uses more frames and context. `ACUIFERO_NODE_PROVIDER=ollama`
+          remains a development-only Acuifero path plus the standard Vigia/local experimentation path.
         </p>
         {runtime?.acuifero && (
           <div className="grid gap-3 text-sm text-gray-700 sm:grid-cols-2">
@@ -131,7 +138,7 @@ export default function Settings() {
             <div><span className="text-gray-500">Vision backend:</span> {runtime.acuifero.vision_backend}</div>
             <div className="flex items-center gap-2">
               {runtime.acuifero.engine_ready ? <CheckCircle2 className="w-4 h-4 text-green-600" /> : <ServerCrash className="w-4 h-4 text-red-600" />}
-              <span>{runtime.acuifero.engine_ready ? 'LiteRT engine ready' : 'LiteRT engine not ready'}</span>
+              <span>{runtime.acuifero.engine_ready ? acuiferoReadyLabel : acuiferoNotReadyLabel}</span>
             </div>
             <div className="break-all"><span className="text-gray-500">Model path:</span> {runtime.acuifero.model_path}</div>
             <div className="break-all"><span className="text-gray-500">Cache dir:</span> {runtime.acuifero.cache_dir}</div>

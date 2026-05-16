@@ -2,12 +2,16 @@ from __future__ import annotations
 
 import importlib
 import json
+import logging
 import threading
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from acuifero_vigia.core.settings import get_settings
+
+
+_LOGGER = logging.getLogger(__name__)
 
 
 @dataclass
@@ -131,7 +135,14 @@ class LiteRTNodeRuntime:
                     return None
                 with engine.create_conversation() as conversation:
                     return conversation.send_message(message)
-        except Exception:
+        except Exception as exc:
+            _LOGGER.warning(
+                "LiteRT node message failed mode=%s backend=%s model=%s error=%s",
+                "multimodal" if multimodal else "text",
+                self.settings.acuifero_node_backend,
+                self.model_name,
+                exc,
+            )
             return None
 
     def _ensure_engine(self, *, multimodal: bool = False) -> Any:

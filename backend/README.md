@@ -55,6 +55,10 @@ uses the same path with more frames and context through
 separate user/volunteer node and is not sized by this Raspberry Pi fixed-node
 profile.
 
+For local development only, the fixed node can still use Ollama by setting
+`ACUIFERO_NODE_PROVIDER=ollama`. That path is explicit dev mode only; LiteRT
+never falls back to Ollama automatically in production.
+
 Download the model once before the first real run:
 
 ```bash

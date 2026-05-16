@@ -125,6 +125,10 @@ Measured Pi 5 status on this branch:
 - today the fixed-node sample flow reaches `multimodal-unavailable-fallback` on this
   exact Pi/model combination
 
+For local development only, Acuifero can also be forced onto the old Ollama
+path with `ACUIFERO_NODE_PROVIDER=ollama`. That mode is not a production Pi
+runtime and is never used as an automatic fallback from LiteRT.
+
 For the Raspberry Pi 16 GB / workstation production profile, use
 `scripts/run_acuifero_pi16_multimodal_prod.sh`; it raises frames, image size,
 context, timeout, retention, and analysis cadence while keeping the same
