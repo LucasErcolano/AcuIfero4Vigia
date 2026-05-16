@@ -100,7 +100,7 @@ def get_settings() -> Settings:
             str(data_dir / "litert-cache"),
         )
     )
-    acuifero_multimodal_enabled_default = _as_bool("ACUIFERO_MULTIMODAL_ENABLED", not is_raspberry_profile)
+    acuifero_multimodal_enabled_default = _as_bool("ACUIFERO_MULTIMODAL_ENABLED", True)
 
     return Settings(
         acuifero_node_profile=acuifero_node_profile,
@@ -118,18 +118,18 @@ def get_settings() -> Settings:
         llm_timeout_seconds=float(os.environ.get("ACUIFERO_LLM_TIMEOUT_SECONDS", "30")),
         acuifero_node_provider=os.environ.get("ACUIFERO_NODE_PROVIDER", "litert").strip().lower(),
         acuifero_node_model_path=acuifero_node_model_path,
-        acuifero_node_backend=os.environ.get("ACUIFERO_NODE_BACKEND", "cpu").strip().lower(),
+        acuifero_node_backend=os.environ.get("ACUIFERO_NODE_BACKEND", "gpu").strip().lower(),
         acuifero_node_vision_backend=os.environ.get(
             "ACUIFERO_NODE_VISION_BACKEND",
-            os.environ.get("ACUIFERO_NODE_BACKEND", "cpu"),
+            os.environ.get("ACUIFERO_NODE_BACKEND", "gpu"),
         ).strip().lower(),
         acuifero_node_enable_speculative_decoding=_as_bool(
             "ACUIFERO_NODE_ENABLE_SPECULATIVE_DECODING",
-            False,
+            True,
         ),
         acuifero_node_cache_dir=acuifero_node_cache_dir,
         acuifero_node_max_output_tokens=int(
-            os.environ.get("ACUIFERO_NODE_MAX_OUTPUT_TOKENS", "256")
+            os.environ.get("ACUIFERO_NODE_MAX_OUTPUT_TOKENS", "1024")
         ),
         acuifero_multimodal_enabled=acuifero_multimodal_enabled_default,
         acuifero_multimodal_verifier_enabled=_as_bool(

@@ -16,8 +16,8 @@ export ACUIFERO_NODE_MODEL_PATH=/mnt/acuifero/data/models/gemma-4-E2B-it.litertl
 export ACUIFERO_NODE_BACKEND=gpu
 export ACUIFERO_NODE_VISION_BACKEND=gpu
 export ACUIFERO_NODE_CACHE_DIR=/mnt/acuifero/data/litert-cache
-export ACUIFERO_NODE_ENABLE_SPECULATIVE_DECODING=false
-export ACUIFERO_NODE_MAX_OUTPUT_TOKENS=256
+export ACUIFERO_NODE_ENABLE_SPECULATIVE_DECODING=true
+export ACUIFERO_NODE_MAX_OUTPUT_TOKENS=1024
 export ACUIFERO_MULTIMODAL_ENABLED=true
 export ACUIFERO_MULTIMODAL_MODEL=gemma-4-E2B-it.litertlm
 export ACUIFERO_MULTIMODAL_MAX_FRAMES=1
@@ -43,10 +43,18 @@ Measured Raspberry Pi 5 status on this branch:
   `llvmpipe` WebGPU and the vision encoder exceeds the available buffer size.
 - Generic cold text smoke is real LiteRT inference but slow on this Pi:
   `elapsed_seconds=130` in the measured run.
-- Acuifero alert reasoning text now has a Pi-short prompt. A measured run with
-  `ACUIFERO_NODE_MAX_OUTPUT_TOKENS=256` produced `reasoning_model=gemma-4-E2B-it.litertlm`
+- On the Windows verification machine, `ACUIFERO_NODE_BACKEND=gpu` plus
+  `ACUIFERO_NODE_ENABLE_SPECULATIVE_DECODING=true` works for text, reasoning,
+  and one-image multimodal smoke. The one-image smoke requires at least
+  `ACUIFERO_NODE_MAX_OUTPUT_TOKENS=512`; the full temporal Acuifero prompt needs
+  the current 1024-token budget. At 256 tokens LiteRT rejects the simple image
+  input with `Input token ids are too long. Exceeding the maximum number of tokens allowed: 300 >= 256`.
+- Acuifero alert reasoning text now has a Pi-short prompt. A previous measured
+  Pi run with a 256-token engine produced `reasoning_model=gemma-4-E2B-it.litertlm`
   in `350.18s` with about `3120 MB` max RSS. This is real LiteRT-LM inference,
-  but too slow to claim stable operational latency on Raspberry Pi 5 8 GB.
+  but too slow to claim stable operational latency on Raspberry Pi 5 8 GB. The
+  current profile uses 1024 tokens so the same engine budget can also admit the
+  full one-frame temporal multimodal prompt.
 - Result today: `sample-node-analysis` reaches conservative fallback
   (`runner.mode=multimodal-unavailable-fallback`) on this exact hardware/model
   pairing.
@@ -93,7 +101,8 @@ export ACUIFERO_NODE_MODEL_PATH=$PWD/backend/data/models/gemma-4-E2B-it.litertlm
 export ACUIFERO_NODE_BACKEND=gpu
 export ACUIFERO_NODE_VISION_BACKEND=gpu
 export ACUIFERO_NODE_CACHE_DIR=$PWD/backend/data/litert-cache
-export ACUIFERO_NODE_MAX_OUTPUT_TOKENS=256
+export ACUIFERO_NODE_ENABLE_SPECULATIVE_DECODING=true
+export ACUIFERO_NODE_MAX_OUTPUT_TOKENS=1024
 backend/.venv/bin/python scripts/litert_smoke.py --reasoning
 ```
 
@@ -154,6 +163,10 @@ The guard records a short MJPEG AVI with ffmpeg and posts it to
 
 - `acuifero.provider=litert` means the node is configured for LiteRT-LM.
 - `acuifero.engine_ready=true` means the LiteRT runtime and model file are ready.
+- `acuifero.speculative_decoding=true` means the LiteRT engine is created with
+  speculative decoding enabled.
+- `acuifero.counts_for_p1=true` means the configured Acuifero node inference path
+  is LiteRT-LM and the engine is ready; Ollama dev mode reports `false`.
 - `runner.mode=litert-multimodal-temporal` means Gemma 4 read the image(s) through LiteRT-LM.
 - `runner.mode=multimodal-unavailable-fallback` is the current expected result on
   the measured Pi 5 + Gemma 4 E2B setup until the vision path fits the device.

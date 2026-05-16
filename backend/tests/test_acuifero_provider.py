@@ -168,7 +168,38 @@ def test_runtime_status_uses_ollama_health_for_dev_provider(monkeypatch: pytest.
 
     assert status.acuifero["provider"] == "ollama"
     assert status.acuifero["engine_ready"] is True
+    assert status.acuifero["counts_for_p1"] is False
     assert "Ollama development runtime" in status.acuifero["engine_detail"]
+
+
+def test_runtime_status_exposes_litert_p1_fields(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+    model_path = tmp_path / "gemma-4-E2B-it.litertlm"
+    monkeypatch.setenv("ACUIFERO_NODE_PROVIDER", "litert")
+    monkeypatch.setenv("ACUIFERO_NODE_MODEL_PATH", str(model_path))
+    monkeypatch.setenv("ACUIFERO_NODE_BACKEND", "gpu")
+    monkeypatch.setenv("ACUIFERO_NODE_ENABLE_SPECULATIVE_DECODING", "true")
+    monkeypatch.setattr(
+        deps_module.acuifero_node_runtime,
+        "health",
+        lambda: LiteRTNodeHealth(
+            enabled=True,
+            reachable=True,
+            provider="litert",
+            backend="gpu",
+            model="gemma-4-E2B-it.litertlm",
+            model_path=str(model_path),
+            detail="ready",
+        ),
+    )
+
+    status = anyio.run(get_runtime_status)
+
+    assert status.acuifero["provider"] == "litert"
+    assert status.acuifero["backend"] == "gpu"
+    assert status.acuifero["speculative_decoding"] is True
+    assert status.acuifero["max_output_tokens"] == 1024
+    assert status.acuifero["engine_ready"] is True
+    assert status.acuifero["counts_for_p1"] is True
 
 
 def test_litert_runtime_logs_fail_closed(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, caplog: pytest.LogCaptureFixture):
@@ -182,3 +213,19 @@ def test_litert_runtime_logs_fail_closed(monkeypatch: pytest.MonkeyPatch, tmp_pa
 
     assert response is None
     assert "LiteRT node message failed" in caplog.text
+
+
+def test_productive_scripts_keep_litert_gpu_speculative_defaults():
+    root = Path(__file__).resolve().parents[2]
+    script_paths = [
+        root / "scripts" / "run_acuifero_pi8_multimodal_demo.sh",
+        root / "scripts" / "run_acuifero_pi16_multimodal_prod.sh",
+    ]
+
+    for script_path in script_paths:
+        text = script_path.read_text(encoding="utf-8")
+        assert 'ACUIFERO_NODE_PROVIDER="${ACUIFERO_NODE_PROVIDER:-litert}"' in text
+        assert 'ACUIFERO_NODE_BACKEND="${ACUIFERO_NODE_BACKEND:-gpu}"' in text
+        assert 'ACUIFERO_NODE_VISION_BACKEND="${ACUIFERO_NODE_VISION_BACKEND:-gpu}"' in text
+        assert 'ACUIFERO_NODE_ENABLE_SPECULATIVE_DECODING="${ACUIFERO_NODE_ENABLE_SPECULATIVE_DECODING:-true}"' in text
+        assert 'ACUIFERO_NODE_MAX_OUTPUT_TOKENS="${ACUIFERO_NODE_MAX_OUTPUT_TOKENS:-1024}"' in text

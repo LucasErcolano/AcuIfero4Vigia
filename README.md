@@ -107,7 +107,8 @@ Production Acuifero node env on Raspberry Pi 8 GB:
 - keep `ACUIFERO_NODE_PROVIDER=litert`
 - keep `ACUIFERO_NODE_BACKEND=gpu`
 - keep `ACUIFERO_NODE_VISION_BACKEND=gpu`
-- keep `ACUIFERO_NODE_ENABLE_SPECULATIVE_DECODING=false`
+- keep `ACUIFERO_NODE_ENABLE_SPECULATIVE_DECODING=true`
+- keep `ACUIFERO_NODE_MAX_OUTPUT_TOKENS=1024`
 - keep `ACUIFERO_MULTIMODAL_ENABLED=true`
 - keep `ACUIFERO_MULTIMODAL_MAX_FRAMES=1`
 - keep `ACUIFERO_MULTIMODAL_IMAGE_MAX_SIDE=512`
@@ -117,6 +118,8 @@ Production Acuifero node env on Raspberry Pi 8 GB:
 Measured Pi 5 status on this branch:
 
 - LiteRT text smoke inference works with `backend=gpu`
+- LiteRT text and reasoning smokes work with speculative decoding enabled on the
+  Windows verification machine for this branch
 - LiteRT `backend=cpu` fails during engine creation on this device/runtime
 - Gemma 4 E2B vision inference still fails on Pi 5 because the WebGPU path lands on
   Mesa `llvmpipe` and exhausts the available buffer budget
@@ -300,7 +303,7 @@ curl -sf -X POST http://127.0.0.1:8000/api/reports \
 
 Expected on a healthy setup:
 
-- `/api/settings/runtime` returns `acuifero.provider=litert`, `acuifero.engine_ready=true`, `acuifero.node_profile=raspberry-pi-8gb-multimodal-demo`, and `acuifero.multimodal_enabled=true`
+- `/api/settings/runtime` returns `acuifero.provider=litert`, `acuifero.backend=gpu`, `acuifero.speculative_decoding=true`, `acuifero.engine_ready=true`, `acuifero.counts_for_p1=true`, `acuifero.model_path`, `acuifero.node_profile=raspberry-pi-8gb-multimodal-demo`, and `acuifero.multimodal_enabled=true`
 - sample-node analysis returns `frames_analyzed>=1`, `assessment_mode=gemma4-multimodal-v1`, and a populated `runner.mode`
 - report submission returns `200 OK` and creates a fused red alert for the sample site
 
@@ -346,4 +349,4 @@ cd frontend && npm run lint
 - The temporal evidence builder is still tuned for fixed cameras with stable framing; moving cameras are out of scope.
 - The fixed-node runtime now targets LiteRT-LM via the Python API; the generic upstream artifact wired here is `gemma-4-E2B-it.litertlm`.
 - Hydromet data is real but model-based; it is not a replacement for a local gauging station.
-- Raspberry Pi 8 GB remains a constrained profile, so the default path keeps a single curated frame and CPU backend.
+- Raspberry Pi 8 GB remains a constrained profile, so the default path keeps a single curated frame while favoring the LiteRT GPU backend with speculative decoding.

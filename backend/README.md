@@ -31,8 +31,8 @@ ACUIFERO_NODE_MODEL_PATH=backend/data/models/gemma-4-E2B-it.litertlm
 ACUIFERO_NODE_BACKEND=gpu
 ACUIFERO_NODE_VISION_BACKEND=gpu
 ACUIFERO_NODE_CACHE_DIR=backend/data/litert-cache
-ACUIFERO_NODE_ENABLE_SPECULATIVE_DECODING=false
-ACUIFERO_NODE_MAX_OUTPUT_TOKENS=256
+ACUIFERO_NODE_ENABLE_SPECULATIVE_DECODING=true
+ACUIFERO_NODE_MAX_OUTPUT_TOKENS=1024
 ACUIFERO_MULTIMODAL_ENABLED=true
 ACUIFERO_MULTIMODAL_VERIFIER_ENABLED=false
 ACUIFERO_MULTIMODAL_MODEL=gemma-4-E2B-it.litertlm
@@ -46,10 +46,13 @@ ACUIFERO_ARTIFACT_RETENTION_DAYS=3
 
 For this profile, Acuifero prepares one optimized frame and attempts Gemma 4
 multimodal through LiteRT-LM. On the measured Raspberry Pi 5 setup in this
-branch, text smoke inference works with `gpu`, but vision still fails on the
-software WebGPU stack and the node path falls back conservatively. Non-green
-reasoning also falls back today because the longer LiteRT text decode path is
-not yet stable on this device. The Raspberry Pi 16 GB / workstation profile
+branch, text and reasoning smoke inference work with `gpu` and speculative
+decoding enabled. The simple one-image smoke needs at least a 512-token engine
+budget, and the full temporal node-analysis prompt needs a 1024-token budget;
+with 256 or 512 tokens those paths can fail before inference because the image
+prompt exceeds the token cap. On the measured Raspberry Pi 5, vision still
+fails on the software WebGPU stack and the node path falls back conservatively.
+The Raspberry Pi 16 GB / workstation profile
 uses the same path with more frames and context through
 `../scripts/run_acuifero_pi16_multimodal_prod.sh`. Vigia is treated as a
 separate user/volunteer node and is not sized by this Raspberry Pi fixed-node
