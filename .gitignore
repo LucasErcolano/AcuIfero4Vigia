@@ -19,6 +19,7 @@ frontend/**/*.log
 tools/ollama/
 fixtures/media/
 fixtures/frames/
+docs/hackathon/context-sources/
 
 android/local.properties
 android/.gradle/
