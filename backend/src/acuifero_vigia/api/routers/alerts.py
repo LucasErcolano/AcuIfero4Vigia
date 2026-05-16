@@ -7,7 +7,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import Session, select
 
-from acuifero_vigia.api.deps import enqueue_entity, llm_client
+from acuifero_vigia.api.deps import acuifero_node_runtime, enqueue_entity
 from acuifero_vigia.db.database import get_session
 from acuifero_vigia.models.domain import ActuationRecord, FusedAlert, HydrometSnapshot, Incident, NodeObservation, ParsedObservation, Site, SyncQueueItem, VolunteerReport
 from acuifero_vigia.schemas.api import RecomputeRequest
@@ -247,7 +247,7 @@ async def recompute_alerts(
     site_ids = [payload.site_id] if payload.site_id else [site.id for site in session.exec(select(Site)).all()]
     results: list[dict[str, object]] = []
     for site_id in site_ids:
-        alert = recompute_site_alert(session, site_id, llm_client)
+        alert = recompute_site_alert(session, site_id, acuifero_node_runtime)
         session.flush()
         enqueue_entity(session, "fused_alert", alert)
         _enqueue_decision_side_effects(session, alert)

@@ -10,9 +10,13 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any, Optional, Protocol
 
 from acuifero_vigia.adapters.llm import OpenAICompatibleLLM
+
+
+class TextGenerator(Protocol):
+    def generate_text(self, system_prompt: str, user_prompt: str, max_tokens: int = 320) -> str | None: ...
 
 
 @dataclass
@@ -23,13 +27,10 @@ class ReasoningBlock:
 
 
 SYSTEM_PROMPT_ES = (
-    "Sos un analista del sistema de alerta temprana de inundaciones "
-    "Acuifero 4 + Vigia. Tu tarea es producir una explicacion auditable en "
-    "espanol rioplatense sobre por que se emitio una alerta con cierto nivel "
-    "de severidad. Siempre nombra las senales concretas por su nombre "
-    "(waterline_ratio, rise_velocity, crossed_critical_line, water_level_category, "
-    "trend, road_status, bridge_status, hydromet) y escribi en 2 a 3 oraciones. "
-    "No inventes datos que no esten en el contexto. No uses markdown."
+    "Sos Gemma en el nodo Acuifero. Responde en espanol. "
+    "Usa maximo 35 palabras. Cita senales por nombre. "
+    "Formato exacto: Resumen: ... Cadena: paso1 -> paso2. "
+    "Sin markdown ni datos inventados."
 )
 
 
@@ -42,49 +43,35 @@ def _render_inputs(
     rules_fired: list[str],
 ) -> str:
     parts: list[str] = []
-    parts.append(f"Nivel fusionado: {level} (score={fused_score:.2f}).")
+    parts.append(f"nivel={level} score={fused_score:.2f}")
     if node_obs:
         parts.append(
-            "Nodo fijo: "
-            f"waterline_ratio={node_obs.get('waterline_ratio', 0):.2f}, "
-            f"rise_velocity={node_obs.get('rise_velocity', 0):.2f}, "
-            f"crossed_critical_line={node_obs.get('crossed_critical_line', False)}, "
-            f"confidence={node_obs.get('confidence', 0):.2f}."
+            "node "
+            f"waterline_ratio={node_obs.get('waterline_ratio', 0):.2f} "
+            f"rise_velocity={node_obs.get('rise_velocity', 0):.2f} "
+            f"crossed_critical_line={node_obs.get('crossed_critical_line', False)} "
+            f"confidence={node_obs.get('confidence', 0):.2f}"
         )
-        if node_obs.get("temporal_summary"):
-            parts.append(f"Resumen temporal nodo: {node_obs.get('temporal_summary')}.")
-        if node_obs.get("runner_name"):
-            parts.append(
-                f"Runner nodo: {node_obs.get('runner_name')} modo={node_obs.get('runner_mode', 'unknown')}, "
-                f"fallback={node_obs.get('fallback_used', False)}."
-            )
     else:
-        parts.append("Nodo fijo: sin observaciones recientes.")
+        parts.append("node none")
     if volunteer_parsed:
         parts.append(
-            "Reporte voluntario: "
-            f"water_level_category={volunteer_parsed.get('water_level_category', 'unknown')}, "
-            f"trend={volunteer_parsed.get('trend', 'unknown')}, "
-            f"road_status={volunteer_parsed.get('road_status', 'unknown')}, "
-            f"bridge_status={volunteer_parsed.get('bridge_status', 'unknown')}, "
-            f"urgency={volunteer_parsed.get('urgency', 'unknown')}."
+            "vigia "
+            f"water_level_category={volunteer_parsed.get('water_level_category', 'unknown')} "
+            f"trend={volunteer_parsed.get('trend', 'unknown')} "
+            f"road_status={volunteer_parsed.get('road_status', 'unknown')} "
+            f"bridge_status={volunteer_parsed.get('bridge_status', 'unknown')} "
+            f"urgency={volunteer_parsed.get('urgency', 'unknown')}"
         )
-    else:
-        parts.append("Reporte voluntario: no hay reportes recientes.")
     if hydromet:
         parts.append(
-            "Hidromet: "
-            f"precipitacion_mm={hydromet.get('precipitation_mm', 0):.1f}, "
-            f"caudal={hydromet.get('river_discharge', 'NA')}, "
-            f"tendencia={hydromet.get('river_discharge_trend', 'NA')}."
+            "hydromet "
+            f"precipitation_mm={hydromet.get('precipitation_mm', 0):.1f} "
+            f"river_discharge={hydromet.get('river_discharge', 'NA')} "
+            f"river_discharge_trend={hydromet.get('river_discharge_trend', 'NA')}"
         )
     if rules_fired:
-        parts.append("Reglas deterministicas: " + "; ".join(rules_fired) + ".")
-    parts.append(
-        "Produci dos o tres oraciones que expliquen por que este nivel, "
-        "citando al menos dos senales concretas. Luego, en una linea aparte "
-        "comenzada con 'Cadena:', listar 2 o 3 pasos de razonamiento separados por ' -> '."
-    )
+        parts.append("rules " + ", ".join(rules_fired[:4]))
     return "\n".join(parts)
 
 
@@ -116,6 +103,19 @@ def _fallback(level: str, rules_fired: list[str]) -> ReasoningBlock:
     )
 
 
+def _runtime_model_name(llm: object) -> str:
+    if hasattr(llm, "model_name"):
+        value = getattr(llm, "model_name")
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    settings = getattr(llm, "settings", None)
+    if settings is not None:
+        value = getattr(settings, "llm_model", None)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return "unknown-runtime"
+
+
 def generate_alert_reasoning(
     level: str,
     fused_score: float,
@@ -123,7 +123,7 @@ def generate_alert_reasoning(
     volunteer_parsed: Optional[dict[str, Any]],
     hydromet: Optional[dict[str, Any]],
     rules_fired: list[str],
-    llm: Optional[OpenAICompatibleLLM] = None,
+    llm: Optional[TextGenerator] = None,
 ) -> ReasoningBlock:
     """Produce a Spanish reasoning block for an alert.
 
@@ -142,7 +142,7 @@ def generate_alert_reasoning(
         return _fallback(level, rules_fired)
 
     user_prompt = _render_inputs(node_obs, volunteer_parsed, hydromet, fused_score, level, rules_fired)
-    raw = llm.generate_text(SYSTEM_PROMPT_ES, user_prompt, max_tokens=320)
+    raw = llm.generate_text(SYSTEM_PROMPT_ES, user_prompt, max_tokens=192)
     if not raw:
         return _fallback(level, rules_fired)
 
@@ -153,7 +153,7 @@ def generate_alert_reasoning(
     return ReasoningBlock(
         llm_summary=summary,
         llm_chain_of_thought=chain,
-        model_name=llm.settings.llm_model,
+        model_name=_runtime_model_name(llm),
     )
 
 

@@ -140,7 +140,7 @@ for feature work.
 
 ## Local Gemma runtime
 
-Default backend env:
+Default Vigia/dev backend env:
 
 ```bash
 ACUIFERO_LLM_ENABLED=true
@@ -149,14 +149,33 @@ ACUIFERO_LLM_MODEL=gemma4:e2b
 ACUIFERO_LLM_API_KEY=ollama
 ```
 
-Practical recommendation for the Raspberry Pi 8 GB demo:
+Production Acuifero node env on Raspberry Pi 8 GB:
 
-- start with `gemma4:e2b`
+- use LiteRT-LM with the upstream `gemma-4-E2B-it.litertlm` artifact
+- keep `ACUIFERO_NODE_PROVIDER=litert`
+- keep `ACUIFERO_NODE_BACKEND=gpu`
+- keep `ACUIFERO_NODE_VISION_BACKEND=gpu`
+- keep `ACUIFERO_NODE_ENABLE_SPECULATIVE_DECODING=false`
 - keep `ACUIFERO_MULTIMODAL_ENABLED=true`
 - keep `ACUIFERO_MULTIMODAL_MAX_FRAMES=1`
 - keep `ACUIFERO_MULTIMODAL_IMAGE_MAX_SIDE=512`
 - use `ACUIFERO_GUARD_INTERVAL_SECONDS=300` for a frame/clip every five minutes
 - store `ACUIFERO_DATA_DIR` on SSD/NVMe, not on the boot microSD
+
+Measured Pi 5 status on this branch:
+
+- LiteRT text smoke inference works with `backend=gpu`
+- LiteRT `backend=cpu` fails during engine creation on this device/runtime
+- Gemma 4 E2B vision inference still fails on Pi 5 because the WebGPU path lands on
+  Mesa `llvmpipe` and exhausts the available buffer budget
+- non-green alert reasoning still falls back deterministically on this Pi because
+  the real LiteRT text decode path times out or aborts on the longer reasoning prompt
+- today the fixed-node sample flow reaches `multimodal-unavailable-fallback` on this
+  exact Pi/model combination
+
+For local development only, Acuifero can also be forced onto the old Ollama
+path with `ACUIFERO_NODE_PROVIDER=ollama`. That mode is not a production Pi
+runtime and is never used as an automatic fallback from LiteRT.
 
 For the Raspberry Pi 16 GB / workstation production profile, use
 `scripts/run_acuifero_pi16_multimodal_prod.sh`; it raises frames, image size,
@@ -170,9 +189,12 @@ sudo apt-get update
 sudo apt-get install -y ffmpeg
 ```
 
-Install and start the local runtime from the repo root:
+Install and probe the LiteRT node runtime from the repo root:
 
 ```bash
+python3 scripts/fetch_litert_model.py
+python3 scripts/fetch_demo_assets.py
+python3 scripts/litert_smoke.py
 ./scripts/run_acuifero_pi8_multimodal_demo.sh
 ```
 
@@ -221,7 +243,7 @@ python3 scripts/pi_acuifero_node.py --site-id puente-arroyo-01 --camera /dev/vid
 It checks backend/Gemma health, captures or generates a short fixed-camera clip,
 uploads it to `POST /api/node/analyze`, and prints the assessment/alert summary.
 See [`docs/raspberry-pi-acuifero-node.md`](docs/raspberry-pi-acuifero-node.md)
-for the Pi environment, Ollama startup, sample data, and camera capture flow.
+for the Pi environment, LiteRT bootstrap, sample data, and camera capture flow.
 
 ## Local setup
 
@@ -297,12 +319,6 @@ python scripts/demo.py
 
 ## Reproducible smoke test
 
-With Ollama running locally and `gemma4:e2b` already pulled:
-
-```bash
-./tools/ollama/bin/ollama list
-```
-
 Start the stack in two terminals:
 
 ```bash
@@ -332,8 +348,8 @@ curl -sf -X POST http://127.0.0.1:8000/api/reports \
 
 Expected on a healthy setup:
 
-- `/api/settings/runtime` returns `llm.reachable=true`, `model=gemma4:e2b`, `acuifero.node_profile=raspberry-pi-8gb-multimodal-demo`, and `acuifero.multimodal_enabled=true`
-- sample-node analysis returns `frames_analyzed=126`, `assessment_mode=temporal-gemma-v1`, and `alert_level=red` for the bundled USGS clip
+- `/api/settings/runtime` returns `acuifero.provider=litert`, `acuifero.engine_ready=true`, `acuifero.node_profile=raspberry-pi-8gb-multimodal-demo`, and `acuifero.multimodal_enabled=true`
+- sample-node analysis returns `frames_analyzed>=1`, `assessment_mode=gemma4-multimodal-v1`, and a populated `runner.mode`
 - report submission returns `200 OK` and creates a fused red alert for the sample site
 
 ## Main API routes
@@ -376,6 +392,6 @@ cd frontend && npm run lint
 
 - Calibration is numeric and rectangular in the UI, not click-to-draw.
 - The temporal evidence builder is still tuned for fixed cameras with stable framing; moving cameras are out of scope.
-- The default LiteRT runner is a stub target; the implemented fixed-node runtime today is the Ollama runner with deterministic fallback.
+- The fixed-node runtime now targets LiteRT-LM via the Python API; the generic upstream artifact wired here is `gemma-4-E2B-it.litertlm`.
 - Hydromet data is real but model-based; it is not a replacement for a local gauging station.
-- Raspberry Pi 8 GB is a text-first Acuifero node target. Multimodal Gemma over inline images should be treated as an optional stronger-node mode.
+- Raspberry Pi 8 GB remains a constrained profile, so the default path keeps a single curated frame and CPU backend.

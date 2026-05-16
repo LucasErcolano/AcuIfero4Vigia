@@ -22,7 +22,7 @@ from acuifero_vigia.models.domain import (
     VolunteerReport,
 )
 from acuifero_vigia.services.actuators import RECORDED_CALLS, reset_recorded_calls
-from acuifero_vigia.services.decision_engine import level_from_score, recompute_site_alert
+from acuifero_vigia.services.decision_engine import level_from_score, recompute_site_alert, temporal_weight
 
 
 init_db()
@@ -104,6 +104,13 @@ def test_level_from_score_thresholds():
     assert level_from_score(0.40) == "yellow"
     assert level_from_score(0.62) == "orange"
     assert level_from_score(0.82) == "red"
+
+
+def test_temporal_weight_keeps_fresh_evidence_at_full_strength():
+    now = datetime(2026, 5, 14, 12, 0, 0)
+    observed_at = now - timedelta(milliseconds=250)
+
+    assert temporal_weight(observed_at, now, 45) == 1.0
 
 
 def test_temporal_fusion_escalates_two_medium_sources():

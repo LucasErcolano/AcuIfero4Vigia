@@ -15,7 +15,8 @@ dependencies = [
     "httpx",
     "orjson",
     "faster-whisper",
-    "lxml"
+    "lxml",
+    "litert-lm-api==0.11.0"
 ]
 
 [project.optional-dependencies]

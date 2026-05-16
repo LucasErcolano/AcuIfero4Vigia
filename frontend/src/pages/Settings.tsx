@@ -13,6 +13,13 @@ interface RuntimeStatus {
   };
   acuifero?: {
     node_profile: string;
+    provider: string;
+    backend: string;
+    vision_backend: string;
+    engine_ready: boolean;
+    engine_detail: string;
+    model_path: string;
+    cache_dir: string;
     data_dir: string;
     multimodal_enabled: boolean;
     multimodal_verifier_enabled: boolean;
@@ -72,6 +79,13 @@ export default function Settings() {
     }
   };
 
+  const acuiferoReadyLabel = runtime?.acuifero?.provider === 'ollama'
+    ? 'Ollama dev runtime ready'
+    : 'LiteRT runtime ready';
+  const acuiferoNotReadyLabel = runtime?.acuifero?.provider === 'ollama'
+    ? 'Ollama dev runtime not ready'
+    : 'LiteRT runtime not ready';
+
   return (
     <div className="space-y-6 pb-20">
       <div>
@@ -115,7 +129,7 @@ export default function Settings() {
       <section className="grid gap-4 md:grid-cols-2">
         <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
           <h3 className="font-semibold text-gray-900 flex items-center gap-2">
-            <Cpu className="w-5 h-5 text-blue-600" /> Gemma runtime
+            <Cpu className="w-5 h-5 text-blue-600" /> Vigia / dev runtime
           </h3>
           {runtime ? (
             <div className="mt-4 space-y-3 text-sm text-gray-700">
@@ -156,16 +170,25 @@ export default function Settings() {
       <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm space-y-4">
         <h3 className="font-semibold text-gray-900">Acuifero fixed-node setup</h3>
         <p className="text-sm text-gray-600">
-          The fixed Acuifero node now runs Gemma 4 multimodal as the visual decision path. The Pi 8 profile is a minimum demo
-          with one small frame every few minutes; the Pi 16/prod profile uses more frames and context.
-          Vigia is a separate volunteer/user node.
+          The fixed Acuifero node now targets an embedded LiteRT-LM runtime with Gemma 4 E2B. The Pi 8 profile is a minimum
+          demo with one small frame every few minutes; the Pi 16/prod profile uses more frames and context. `ACUIFERO_NODE_PROVIDER=ollama`
+          remains a development-only Acuifero path plus the standard Vigia/local experimentation path.
         </p>
         {runtime?.acuifero && (
           <div className="grid gap-3 text-sm text-gray-700 sm:grid-cols-2">
             <div><span className="text-gray-500">Node profile:</span> {runtime.acuifero.node_profile}</div>
+            <div><span className="text-gray-500">Provider:</span> {runtime.acuifero.provider}</div>
+            <div><span className="text-gray-500">Backend:</span> {runtime.acuifero.backend}</div>
+            <div><span className="text-gray-500">Vision backend:</span> {runtime.acuifero.vision_backend}</div>
+            <div className="flex items-center gap-2">
+              {runtime.acuifero.engine_ready ? <CheckCircle2 className="w-4 h-4 text-green-600" /> : <ServerCrash className="w-4 h-4 text-red-600" />}
+              <span>{runtime.acuifero.engine_ready ? acuiferoReadyLabel : acuiferoNotReadyLabel}</span>
+            </div>
+            <div className="break-all"><span className="text-gray-500">Model path:</span> {runtime.acuifero.model_path}</div>
+            <div className="break-all"><span className="text-gray-500">Cache dir:</span> {runtime.acuifero.cache_dir}</div>
             <div className="break-all"><span className="text-gray-500">Data dir:</span> {runtime.acuifero.data_dir}</div>
             <div><span className="text-gray-500">Gemma multimodal:</span> {runtime.acuifero.multimodal_enabled ? 'Enabled' : 'Disabled'}</div>
-            <div className="break-all"><span className="text-gray-500">Multimodal URL:</span> {runtime.acuifero.multimodal_base_url}</div>
+            <div className="break-all"><span className="text-gray-500">Dev multimodal URL:</span> {runtime.acuifero.multimodal_base_url}</div>
             <div><span className="text-gray-500">Multimodal model:</span> {runtime.acuifero.multimodal_model}</div>
             <div><span className="text-gray-500">Frames per analysis:</span> {runtime.acuifero.multimodal_max_frames}</div>
             <div><span className="text-gray-500">Frame sample spacing:</span> {runtime.acuifero.multimodal_frame_sample_seconds}s</div>
@@ -179,14 +202,16 @@ export default function Settings() {
         <pre className="overflow-x-auto rounded-lg bg-gray-950 p-4 text-xs text-gray-100">
 {`ACUIFERO_NODE_PROFILE=raspberry-pi-8gb-multimodal-demo
 ACUIFERO_DATA_DIR=/mnt/acuifero/data
-ACUIFERO_LLM_ENABLED=true
-ACUIFERO_LLM_BASE_URL=http://127.0.0.1:11434/v1
-ACUIFERO_LLM_MODEL=gemma4:e2b
-ACUIFERO_LLM_API_KEY=ollama
+ACUIFERO_NODE_PROVIDER=litert
+ACUIFERO_NODE_MODEL_PATH=backend/data/models/gemma-4-E2B-it.litertlm
+ACUIFERO_NODE_BACKEND=cpu
+ACUIFERO_NODE_VISION_BACKEND=cpu
+ACUIFERO_NODE_CACHE_DIR=backend/data/litert-cache
+ACUIFERO_NODE_ENABLE_SPECULATIVE_DECODING=false
+ACUIFERO_NODE_MAX_OUTPUT_TOKENS=256
 ACUIFERO_MULTIMODAL_ENABLED=true
 ACUIFERO_MULTIMODAL_VERIFIER_ENABLED=false
-ACUIFERO_MULTIMODAL_BASE_URL=http://127.0.0.1:11434/v1
-ACUIFERO_MULTIMODAL_MODEL=gemma4:e2b
+ACUIFERO_MULTIMODAL_MODEL=gemma-4-E2B-it.litertlm
 ACUIFERO_MULTIMODAL_MAX_FRAMES=1
 ACUIFERO_MULTIMODAL_FRAME_SAMPLE_SECONDS=300
 ACUIFERO_MULTIMODAL_IMAGE_MAX_SIDE=512
@@ -196,8 +221,9 @@ ACUIFERO_MAX_CURATED_FRAMES=1
 ACUIFERO_ARTIFACT_RETENTION_DAYS=3`}
         </pre>
         <p className="text-sm text-gray-600">
-          Use `./scripts/run_acuifero_pi8_multimodal_demo.sh` for the Pi 8 demo or `./scripts/run_acuifero_pi16_multimodal_prod.sh` for the production profile.
-          If the local model is down, Acuifero records the prepared frames and returns a conservative manual-review fallback.
+          Use `./scripts/run_acuifero_pi8_multimodal_demo.sh` for the Pi 8 demo or `./scripts/run_acuifero_pi16_multimodal_prod.sh`
+          for the production profile. If the embedded model is unavailable, Acuifero records the prepared frames and returns a
+          conservative manual-review fallback instead of silently switching to Ollama.
         </p>
       </section>
     </div>

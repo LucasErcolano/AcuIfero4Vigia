@@ -140,7 +140,7 @@ def _run_ffmpeg_extract(video_path: Path, output_dir: Path, *, max_frames: int, 
         f"scale='if(gt(iw,ih),min({max_side},iw),-2)':"
         f"'if(gt(ih,iw),min({max_side},ih),-2)'"
     )
-    output_pattern = output_dir / "acuifero-frame-%03d.jpg"
+    output_pattern = output_dir / "acuifero-frame-%03d.png"
     command = [
         ffmpeg,
         "-hide_banner",
@@ -153,15 +153,35 @@ def _run_ffmpeg_extract(video_path: Path, output_dir: Path, *, max_frames: int, 
         f"fps=1/{interval},{scale}",
         "-frames:v",
         str(max(1, max_frames)),
-        "-q:v",
-        "4",
         str(output_pattern),
     ]
     result = subprocess.run(command, capture_output=True, text=True, check=False)
     if result.returncode != 0:
         detail = (result.stderr or result.stdout or "unknown ffmpeg error").strip()
         raise ValueError(f"ffmpeg frame extraction failed: {detail}")
-    return sorted(output_dir.glob("acuifero-frame-*.jpg"))
+    extracted = sorted(output_dir.glob("acuifero-frame-*.png"))
+    if extracted:
+        return extracted
+
+    fallback_command = [
+        ffmpeg,
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-y",
+        "-i",
+        str(video_path),
+        "-vf",
+        scale,
+        "-frames:v",
+        "1",
+        str(output_pattern),
+    ]
+    fallback = subprocess.run(fallback_command, capture_output=True, text=True, check=False)
+    if fallback.returncode != 0:
+        detail = (fallback.stderr or fallback.stdout or "unknown ffmpeg error").strip()
+        raise ValueError(f"ffmpeg frame extraction fallback failed: {detail}")
+    return sorted(output_dir.glob("acuifero-frame-*.png"))
 
 
 class MultimodalEvidenceBuilder:

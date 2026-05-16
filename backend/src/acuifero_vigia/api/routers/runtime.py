@@ -25,7 +25,16 @@ async def health() -> dict[str, object]:
 async def get_runtime_status() -> RuntimeStatus:
     settings = get_settings()
     llm_status = deps.llm_client.health()
+    acuifero_node_status = deps.acuifero_node_runtime.health()
     hydromet_status = deps.external_data_service.health()
+    acuifero_engine_ready = acuifero_node_status.reachable
+    acuifero_engine_detail = acuifero_node_status.detail
+    if settings.acuifero_node_provider == "ollama":
+        acuifero_engine_ready = llm_status.reachable
+        acuifero_engine_detail = (
+            f"Ollama development runtime for Acuifero. "
+            f"LLM detail: {llm_status.detail}"
+        )
     return RuntimeStatus(
         is_online=deps.is_online,
         llm={
@@ -37,6 +46,13 @@ async def get_runtime_status() -> RuntimeStatus:
         },
         acuifero={
             "node_profile": settings.acuifero_node_profile,
+            "provider": acuifero_node_status.provider,
+            "backend": acuifero_node_status.backend,
+            "vision_backend": settings.acuifero_node_vision_backend,
+            "engine_ready": acuifero_engine_ready,
+            "engine_detail": acuifero_engine_detail,
+            "model_path": acuifero_node_status.model_path,
+            "cache_dir": str(settings.acuifero_node_cache_dir),
             "data_dir": str(settings.data_dir),
             "ffmpeg_bin": settings.ffmpeg_bin,
             "multimodal_enabled": settings.acuifero_multimodal_enabled,
