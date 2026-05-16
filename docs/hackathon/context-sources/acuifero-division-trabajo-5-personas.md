@@ -1,6 +1,6 @@
 # Acuífero: División de Trabajo 5 Personas
 
-Source PDF: `C:\Users\joaco\Downloads\Acuifero_Division_Trabajo_5_Personas.md.pdf`
+Source PDF: `Acuifero_Division_Trabajo_5_Personas.md.pdf`
 
 ---
 

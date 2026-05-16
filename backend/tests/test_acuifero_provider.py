@@ -169,6 +169,8 @@ def test_runtime_status_uses_ollama_health_for_dev_provider(monkeypatch: pytest.
     assert status.acuifero["provider"] == "ollama"
     assert status.acuifero["engine_ready"] is True
     assert status.acuifero["counts_for_p1"] is False
+    assert status.acuifero["p1_runtime_ready"] is False
+    assert "runner.mode=litert-multimodal-temporal" in status.acuifero["p1_evidence_required"]
     assert "Ollama development runtime" in status.acuifero["engine_detail"]
 
 
@@ -203,6 +205,8 @@ def test_runtime_status_exposes_litert_p1_fields(monkeypatch: pytest.MonkeyPatch
     assert status.acuifero["multimodal_max_output_tokens"] == 2048
     assert status.acuifero["engine_ready"] is True
     assert status.acuifero["counts_for_p1"] is True
+    assert status.acuifero["p1_runtime_ready"] is True
+    assert "Runtime readiness only" in status.acuifero["p1_evidence_required"]
 
 
 def test_litert_runtime_logs_fail_closed(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, caplog: pytest.LogCaptureFixture):
@@ -234,3 +238,5 @@ def test_productive_scripts_keep_litert_gpu_speculative_defaults():
         assert 'ACUIFERO_NODE_ENABLE_SPECULATIVE_DECODING="${ACUIFERO_NODE_ENABLE_SPECULATIVE_DECODING:-true}"' in text
         assert 'ACUIFERO_NODE_MAX_OUTPUT_TOKENS="${ACUIFERO_NODE_MAX_OUTPUT_TOKENS:-1024}"' in text
         assert 'ACUIFERO_NODE_MULTIMODAL_MAX_OUTPUT_TOKENS="${ACUIFERO_NODE_MULTIMODAL_MAX_OUTPUT_TOKENS:-2048}"' in text
+        assert 'ACUIFERO_LLM_ENABLED="${ACUIFERO_LLM_ENABLED:-false}"' in text
+        assert 'ACUIFERO_MULTIMODAL_MODEL="${ACUIFERO_MULTIMODAL_MODEL:-gemma-4-E2B-it.litertlm}"' in text

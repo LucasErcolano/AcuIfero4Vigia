@@ -80,9 +80,9 @@ The chip is informational; it does not gate submission or escalation.
 | `ACUIFERO_IMAGE_TIMEOUT_SECONDS` | `300` | HTTP timeout for `image_assessor.assess`. Decoupled from `ACUIFERO_LLM_TIMEOUT_SECONDS` so a slow multimodal call does not force the structuring/reasoning pipeline to wait that long. On CPU-only dev with `IMAGE_MAX_TOKENS=120` the assess completes in ~190–220 s, so 300 s gives margin. |
 | `ACUIFERO_ACTUATORS_ENABLED` | `true` | When `false`, `dispatch_actuators` is short-circuited and no tool calls are issued regardless of alert level. |
 
-## 5. Latency on CPU-only dev hardware (Ryzen 7, no GPU)
+## 5. Latency on CPU-only development hardware
 
-Measured during this branch's Phase 0:
+Measured during the Vigía integration branch on CPU-only hardware:
 
 - Gemma 4 E2B: ~3.5 tokens/s sustained.
 - ASR (Whisper tiny int8): first-call cold load ~35 s; transcription of a 30 s wav: ~5–10 s.
@@ -95,7 +95,8 @@ Demo machines with GPU acceleration (the production target via MediaPipe on Andr
 
 - Native photo and audio capture inside the Android UI is NOT implemented in this PR. The device-capture path requires CameraX plus `MediaRecorder` wiring and was deferred because no physical device or emulator was available in this session. The PWA covers the demo path; Android currently exercises the on-device structuring layer against typed transcripts.
 - The `.task` asset (gemma4-e2b for MediaPipe, ~1.4 GB) is NOT bundled in the APK and is NOT auto-downloaded. The `GemmaOnDevice` wrapper expects it at `context.filesDir/gemma4-e2b.task`; the dev or operator places it there manually for now.
-- Android unit tests under `app/src/test/` are written but were NOT executed in this session because the dev machine lacks the Android SDK. Run `./gradlew :app:testDebugUnitTest` once the SDK is installed.
+- Android unit tests under `app/src/test/` are written but require an Android
+  SDK. Run `./gradlew :app:testDebugUnitTest` in an Android-capable checkout.
 - Real-device benchmarks for on-device Gemma latency are pending. The numbers in `docs/hackathon/android_gemma.md` are still projections.
 - iOS Safari `MediaRecorder` has well-known quirks; the PWA targets Chrome-class browsers for the hackathon demo. This belongs in the pitch script.
 - Tool-call dispatch is gated on Ollama Gemma 4 emitting valid `tool_calls`, verified in Phase 0 V1 of this branch. If a different model is wired in, the behaviour falls back to an empty actuator list — no actuators fired, no error raised.

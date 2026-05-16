@@ -51,17 +51,28 @@ The current production target for the fixed-camera `Acuifero` node is:
 - fixed camera input uploaded to the backend or bound as per-site sample media
 - local SQLite for `edge.db`, audit artifacts, and the sync queue
 
-The Raspberry Pi 8 GB demo profile is the first deploy target:
+The Raspberry Pi 8 GB demo profile is the first deploy target. Use an external
+SSD/NVMe path for `ACUIFERO_DATA_DIR`; `/mnt/acuifero/data` is the example used
+below.
 
 ```bash
 ACUIFERO_NODE_PROFILE=raspberry-pi-8gb-multimodal-demo
 ACUIFERO_DATA_DIR=/mnt/acuifero/data
+ACUIFERO_UPLOAD_DIR=/mnt/acuifero/data/uploads
+ACUIFERO_NODE_PROVIDER=litert
+ACUIFERO_NODE_MODEL_PATH=/mnt/acuifero/data/models/gemma-4-E2B-it.litertlm
+ACUIFERO_NODE_BACKEND=gpu
+ACUIFERO_NODE_MULTIMODAL_BACKEND=cpu
+ACUIFERO_NODE_MULTIMODAL_VISION_BACKEND=cpu
+ACUIFERO_NODE_CACHE_DIR=/mnt/acuifero/data/litert-cache
+ACUIFERO_NODE_ENABLE_SPECULATIVE_DECODING=true
+ACUIFERO_NODE_MAX_OUTPUT_TOKENS=1024
+ACUIFERO_NODE_MULTIMODAL_MAX_OUTPUT_TOKENS=2048
 ACUIFERO_MAX_CURATED_FRAMES=1
 ACUIFERO_ARTIFACT_RETENTION_DAYS=3
 ACUIFERO_MULTIMODAL_ENABLED=true
 ACUIFERO_MULTIMODAL_VERIFIER_ENABLED=false
-ACUIFERO_MULTIMODAL_BASE_URL=http://127.0.0.1:11434/v1
-ACUIFERO_MULTIMODAL_MODEL=gemma4:e2b
+ACUIFERO_MULTIMODAL_MODEL=gemma-4-E2B-it.litertlm
 ACUIFERO_MULTIMODAL_MAX_FRAMES=1
 ACUIFERO_MULTIMODAL_FRAME_SAMPLE_SECONDS=300
 ACUIFERO_MULTIMODAL_IMAGE_MAX_SIDE=512
@@ -92,7 +103,7 @@ for feature work.
 
 ## Local Gemma runtime
 
-Default Vigia/dev backend env:
+Default Vigia/dev backend env for local report-structuring experiments:
 
 ```bash
 ACUIFERO_LLM_ENABLED=true
@@ -121,7 +132,8 @@ Measured Pi 5 status on this branch:
 
 - LiteRT text smoke inference works with `backend=gpu`
 - LiteRT one-image smoke inference works on the Pi with
-  `ACUIFERO_NODE_BACKEND=cpu`,
+  `ACUIFERO_NODE_BACKEND=gpu`,
+  `ACUIFERO_NODE_MULTIMODAL_BACKEND=cpu`,
   `ACUIFERO_NODE_MULTIMODAL_VISION_BACKEND=cpu`,
   `ACUIFERO_NODE_MULTIMODAL_MAX_OUTPUT_TOKENS=2048`, and speculative decoding
   enabled
@@ -129,6 +141,20 @@ Measured Pi 5 status on this branch:
   `llvmpipe` and exhausts the available buffer budget
 - the current Pi profile therefore keeps text/reasoning on GPU and uses a
   CPU-only LiteRT engine for multimodal image inference
+
+Measured end-to-end Acuifero endpoint evidence on Raspberry Pi 5:
+
+- `/api/settings/runtime` returned `acuifero.provider=litert`,
+  `acuifero.backend=gpu`, `acuifero.multimodal_backend=cpu`,
+  `acuifero.multimodal_vision_backend=cpu`,
+  `acuifero.speculative_decoding=true`, `acuifero.engine_ready=true`, and
+  `acuifero.p1_runtime_ready=true`
+- `POST /api/sites/silverado-fixed-cam-usgs/sample-node-analysis` returned
+  `assessment_mode=gemma4-multimodal-v1`,
+  `runner.mode=litert-multimodal-temporal`, `frames_analyzed=1`, and
+  `alert.level=green`
+- this endpoint result is the Acuifero full-flow P1 proof; the
+  `litert_smoke.py --image` command is only a one-image runtime smoke test
 
 For local development only, Acuifero can also be forced onto the old Ollama
 path with `ACUIFERO_NODE_PROVIDER=ollama`. That mode is not a production Pi
@@ -149,6 +175,11 @@ sudo apt-get install -y ffmpeg
 Install and probe the LiteRT node runtime from the repo root:
 
 ```bash
+export REPO_DIR=/opt/acuifero-vigia
+cd "$REPO_DIR"
+python3 -m venv backend/.venv
+source backend/.venv/bin/activate
+python -m pip install -e backend/.[dev]
 python3 scripts/fetch_litert_model.py
 python3 scripts/fetch_demo_assets.py
 python3 scripts/litert_smoke.py
@@ -305,8 +336,8 @@ curl -sf -X POST http://127.0.0.1:8000/api/reports \
 
 Expected on a healthy setup:
 
-- `/api/settings/runtime` returns `acuifero.provider=litert`, `acuifero.backend=gpu`, `acuifero.multimodal_backend=cpu`, `acuifero.multimodal_vision_backend=cpu`, `acuifero.speculative_decoding=true`, `acuifero.engine_ready=true`, `acuifero.counts_for_p1=true`, `acuifero.model_path`, `acuifero.node_profile=raspberry-pi-8gb-multimodal-demo`, and `acuifero.multimodal_enabled=true`
-- sample-node analysis returns `frames_analyzed>=1`, `assessment_mode=gemma4-multimodal-v1`, and a populated `runner.mode`
+- `/api/settings/runtime` returns `acuifero.provider=litert`, `acuifero.backend=gpu`, `acuifero.multimodal_backend=cpu`, `acuifero.multimodal_vision_backend=cpu`, `acuifero.speculative_decoding=true`, `acuifero.engine_ready=true`, `acuifero.p1_runtime_ready=true`, `acuifero.model_path`, `acuifero.node_profile=raspberry-pi-8gb-multimodal-demo`, and `acuifero.multimodal_enabled=true`
+- sample-node analysis returns `frames_analyzed>=1`, `assessment_mode=gemma4-multimodal-v1`, and `runner.mode=litert-multimodal-temporal`
 - report submission returns `200 OK` and creates a fused red alert for the sample site
 
 ## Main API routes

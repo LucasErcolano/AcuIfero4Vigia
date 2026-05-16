@@ -1,4 +1,5 @@
-@C:\Users\joaco\.codex\RTK.md
+Use RTK when available. If a machine does not have RTK installed, follow the
+fallback guidance below and keep commands explicit and reproducible.
 
 Read these project docs before making non-trivial changes:
 

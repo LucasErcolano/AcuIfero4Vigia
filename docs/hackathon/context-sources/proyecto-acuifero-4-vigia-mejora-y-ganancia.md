@@ -1,6 +1,6 @@
 # Proyecto Acuífero 4+Vigía: Mejora y Ganancia
 
-Source PDF: `C:\Users\joaco\Downloads\Proyecto Acuífero 4+Vigía_ Mejora y Ganancia.pdf`
+Source PDF: `Proyecto Acuífero 4+Vigía_ Mejora y Ganancia.pdf`
 
 ---
 

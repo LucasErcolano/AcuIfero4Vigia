@@ -1,6 +1,6 @@
 # Acuífero: Trabajo Pendiente Priorizado v2
 
-Source PDF: `C:\Users\joaco\Downloads\Acuifero_Trabajo_Pendiente_Priorizado_v2.md.pdf`
+Source PDF: `Acuifero_Trabajo_Pendiente_Priorizado_v2.md.pdf`
 
 ---
 

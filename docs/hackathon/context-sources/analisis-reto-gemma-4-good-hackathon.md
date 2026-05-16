@@ -1,6 +1,6 @@
 # Análisis del reto Gemma 4 Good Hackathon
 
-Source PDF: `C:\Users\joaco\Downloads\Análisis del reto Gemma 4 Good Hackathon.pdf`
+Source PDF: `Análisis del reto Gemma 4 Good Hackathon.pdf`
 
 ---
 

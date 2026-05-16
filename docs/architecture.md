@@ -7,7 +7,7 @@
 [ Bundled USGS Clip ] ----> [ sample-node-analysis ] --------------------------------------------^
 [ Volunteer PWA ] --------> [ FastAPI Backend ] -------------------------------------------------> [ edge.db ] -> [ sync queue ] -> [ central.db ]
 [ Open-Meteo APIs ] ------> [ Hydromet Snapshot ]
-[ Local Gemma via Ollama ] -> [ Acuifero Node Assessment + Alert Reasoning ]
+[ Local LiteRT-LM Gemma ] -> [ Acuifero Node Assessment + Alert Reasoning ]
 [ Separate Vigia App ] ----> [ Volunteer Reports / User Node ]
 ```
 
@@ -115,31 +115,45 @@ status, idempotent queue updates for the same pending entity, and
 
 ## Runtime model contract
 
-The fixed `Acuifero` node expects an OpenAI-compatible chat endpoint:
+The fixed `Acuifero` node uses the embedded LiteRT-LM Python runtime for the
+production Pi path. The expected artifact is
+`litert-community/gemma-4-E2B-it-litert-lm` /
+`gemma-4-E2B-it.litertlm`.
 
-- base URL: `ACUIFERO_LLM_BASE_URL`
-- model name: `ACUIFERO_LLM_MODEL`
-- endpoints used: `/v1/models`, `/v1/chat/completions`, and Ollama native `/api/chat` when available
+Default production runtime for the fixed Acuifero node:
 
-Default local runtime for the fixed Acuifero node:
-
-- Ollama installed under `tools/ollama`
-- `gemma4:e2b` as the default multimodal model for a Raspberry Pi 5 with 8 GB RAM
+- LiteRT-LM package installed in the backend virtual environment
+- `gemma-4-E2B-it.litertlm` stored under `$ACUIFERO_DATA_DIR/models` or the
+  explicit `ACUIFERO_NODE_MODEL_PATH`
 - `ACUIFERO_NODE_PROFILE=raspberry-pi-8gb-multimodal-demo`
 - `ACUIFERO_DATA_DIR=/mnt/acuifero/data` on SSD/NVMe
+- `ACUIFERO_NODE_PROVIDER=litert`
+- `ACUIFERO_NODE_BACKEND=gpu`
+- `ACUIFERO_NODE_MULTIMODAL_BACKEND=cpu`
+- `ACUIFERO_NODE_MULTIMODAL_VISION_BACKEND=cpu`
+- `ACUIFERO_NODE_ENABLE_SPECULATIVE_DECODING=true`
+- `ACUIFERO_NODE_MAX_OUTPUT_TOKENS=1024`
+- `ACUIFERO_NODE_MULTIMODAL_MAX_OUTPUT_TOKENS=2048`
 - `ACUIFERO_MAX_CURATED_FRAMES=1`
 - `ACUIFERO_ARTIFACT_RETENTION_DAYS=3`
 - `ACUIFERO_MULTIMODAL_ENABLED=true`
 - `ACUIFERO_MULTIMODAL_VERIFIER_ENABLED=false`
-- `ACUIFERO_MULTIMODAL_BASE_URL=http://127.0.0.1:11434/v1`
-- `ACUIFERO_MULTIMODAL_MODEL=gemma4:e2b`
+- `ACUIFERO_MULTIMODAL_MODEL=gemma-4-E2B-it.litertlm`
 - `ACUIFERO_MULTIMODAL_MAX_FRAMES=1`
 - `ACUIFERO_MULTIMODAL_FRAME_SAMPLE_SECONDS=300`
 - `ACUIFERO_MULTIMODAL_IMAGE_MAX_SIDE=512`
-- repo helper scripts: `scripts/install_ollama_local.sh`, `scripts/run_gemma_local.sh`,
-  `scripts/run_acuifero_pi8_multimodal_demo.sh`, and
+- repo helper scripts: `scripts/fetch_litert_model.py`,
+  `scripts/litert_smoke.py`, `scripts/run_acuifero_pi8_multimodal_demo.sh`, and
   `scripts/run_acuifero_pi16_multimodal_prod.sh`
-- LiteRT runner kept as an explicit future target, not the current default implementation
+
+Ollama is retained only for explicit development mode and Vigia/local
+experiments. It is not an automatic production fallback for Acuifero; if
+LiteRT-LM is unavailable, the node must report that state instead of silently
+switching to Ollama.
+
+`/api/settings/runtime` exposes `p1_runtime_ready` as a runtime readiness flag
+for this LiteRT configuration. Jury-facing evidence must come from an actual
+analysis response, specifically `runner.mode=litert-multimodal-temporal`.
 
 On Raspberry Pi 8 GB, Acuifero is multimodal-first but sparse: ffmpeg extracts
 one optimized frame and Gemma 4 performs the visual interpretation. OpenCV is not
