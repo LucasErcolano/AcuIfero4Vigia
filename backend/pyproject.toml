@@ -14,13 +14,15 @@ dependencies = [
     "aiofiles",
     "httpx",
     "orjson",
-    "faster-whisper"
+    "faster-whisper",
+    "lxml"
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest",
-    "pytest-asyncio"
+    "pytest-asyncio",
+    "trio"
 ]
 
 [build-system]

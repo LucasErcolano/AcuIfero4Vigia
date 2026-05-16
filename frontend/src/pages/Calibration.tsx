@@ -58,10 +58,6 @@ export default function Calibration() {
     })();
   }, [id]);
 
-  useEffect(() => {
-    draw();
-  });
-
   const draw = () => {
     const canvas = canvasRef.current;
     const img = imgRef.current;
@@ -113,6 +109,10 @@ export default function Calibration() {
     drawLine(criticalLine, '#dc2626');
     drawLine(referenceLine, '#f59e0b');
   };
+
+  useEffect(() => {
+    draw();
+  });
 
   const onImgLoad = () => {
     const img = imgRef.current;

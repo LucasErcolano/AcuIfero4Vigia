@@ -17,12 +17,12 @@
       "clips": [
         { "block": "B01", "in": 0.0,   "out": 12.0,  "src": "../raw/broll_river_storm_01.mp4",         "overlay": "title_card" },
         { "block": "B02", "in": 12.0,  "out": 30.0,  "src": "../raw/talking_head_lucas_take1.mp4",     "cutaway": [{ "in": 24.0, "out": 29.0, "src": "../raw/broll_litoral_town_01.mp4" }] },
-        { "block": "B03", "in": 30.0,  "out": 55.0,  "src": "../raw/hf_vigia_input_to_json.mp4",       "cutaway": [{ "in": 38.0, "out": 44.0, "src": "../raw/broll_volunteer_phone_01.mp4" }] },
+        { "block": "B03", "in": 30.0,  "out": 55.0,  "src": "../raw/hf_vigia.mp4",                     "cutaway": [{ "in": 38.0, "out": 44.0, "src": "../raw/broll_volunteer_phone_01.mp4" }] },
         { "block": "B04", "in": 55.0,  "out": 90.0,  "src": "../raw/screencast_node_analysis.mp4",     "cutaway": [{ "in": 70.0, "out": 80.0, "src": "../raw/hf_evidence_pack.mp4" }] },
         { "block": "B05", "in": 90.0,  "out": 120.0, "src": "../raw/screencast_wifi_off_to_sync.mp4",  "cutaway": [{ "in": 95.0, "out": 98.0, "src": "../raw/broll_airplane_mode_toggle.mp4" }], "audio_overlay": [{ "id": "siren", "at": 108.0 }] },
-        { "block": "B06", "in": 120.0, "out": 145.0, "src": "../raw/hf_alert_reasoning_chain.mp4" },
+        { "block": "B06", "in": 120.0, "out": 145.0, "src": "../raw/hf_reasoning_chain.mp4" },
         { "block": "B07", "in": 145.0, "out": 168.0, "src": "../raw/hf_sinagir_export.mp4",            "cutaway": [{ "in": 160.0, "out": 168.0, "src": "../raw/hf_litoral_map.mp4" }] },
-        { "block": "B08", "in": 168.0, "out": 180.0, "src": "../raw/end_card.mp4" }
+        { "block": "B08", "in": 168.0, "out": 180.0, "src": "../raw/hf_end_card.mp4" }
       ]
     }
   ],
