@@ -1,114 +1,131 @@
-# Persona C Demo Recording — Backend / Fusion / CAP / Function Calling
+# Demo recording path · Persona C — Backend & Fusion command center
 
-Self-contained script. Follow top to bottom for a 90-second demo recording.
+This file documents exactly what the Backend & Fusion lead (Persona C) clicks and shows during the 3-minute hackathon recording. The whole story plays out on **one screen**: the operator dashboard at `/`.
 
----
-
-## What this demo shows
-
-Persona C's deliverables, end-to-end, through the operator console:
-
-1. **Fusion** of node + citizen signals (handled by `fusion/engine.py`).
-2. **Auditable Gemma reasoning trace** attached to the fused alert.
-3. **CAP v1.2 emission** via the real backend endpoint `POST /api/cap/emit`.
-4. **SINAGIR JSON export** via `POST /api/alerts/{alert_id}/export-sinagir`.
-5. **Offline / sync behavior** via `POST /api/settings/connectivity` and `GET /api/sync/status`.
-6. **Demo-simulated actuation** (siren, LoRa, notify) — explicitly labeled as sim.
-
-What is *not* demoed: live talking-head, B-roll, screencast B05 ensemble. Those belong to D+E.
+Target resolution: **1440 × 900** (zoom browser to ~100%, hide bookmarks bar).
 
 ---
 
-## Pre-flight
+## 1. Pre-roll setup (do this BEFORE the camera rolls)
 
 ```bash
-# repo root
-docker compose up backend     # or python -m acuifero_vigia
-cd frontend
-npm install --legacy-peer-deps
-npm run dev
+# Terminal A
+cd backend && PYTHONPATH=src python3 -m acuifero_vigia.scripts.seed
+PYTHONPATH=src python3 -m uvicorn acuifero_vigia.main:app --host 127.0.0.1 --port 8000
+
+# Terminal B
+./scripts/run_gemma_local.sh   # Ollama + gemma4:e2b warming up
+
+# Terminal C
+cd frontend && npm run dev -- --host 127.0.0.1 --port 5173
 ```
 
-Open `http://localhost:5173`.
+Then in the browser:
 
-Confirm:
-- Top bar shows `Acuifero 4 + Vigia` with green `Online` pill.
-- Bottom nav has `Dashboard / Report / Queue / Runtime`.
-
----
-
-## Recording sequence (~90 s)
-
-### Beat 1 — Site context (0:00–0:10)
-- Dashboard → click any site → land on Site Detail.
-- Read aloud: site name, region, hydromet card (signal score, rain, river discharge).
-
-### Beat 2 — Run analysis (0:10–0:25)
-- Scroll to **Analyze fixed-camera clip**.
-- Click `Analyze bundled sample` (no upload needed — uses repo demo clip).
-- Wait for response (~5–10 s).
-- Point to **Node metrics** (waterline ratio, rise velocity, confidence, critical-line crossed).
-
-### Beat 3 — Fusion + auditable reasoning (0:25–0:45)
-- In **Resulting alert** panel, expand `Razonamiento de Gemma (gemma4:e2b)`.
-- Show the reasoning summary + numbered chain — this is the audit trail.
-- Mention fusion rules implemented (`fusion/engine.py`): single-source → moderate cap; cross-source within 500 m / 10 min → can escalate to severe.
-
-### Beat 4 — CAP emission (0:45–1:00)
-- Scroll to **Command center**.
-- Click `Emit CAP`.
-- Expand `CAP XML payload`. Show:
-  - OASIS namespace `urn:oasis:names:tc:emergency:cap:1.2`
-  - Severity, area polygon, headline in Spanish.
-  - SHA-256 signature parameter.
-
-### Beat 5 — SINAGIR export (1:00–1:10)
-- Click `Export SINAGIR`.
-- Expand the JSON. Mention this is the SINAGIR-ready handoff for Defensa Civil.
-
-### Beat 6 — Action guard / simulated actuation (1:10–1:20)
-- Click `Trigger siren (sim)` → action log appends `SIMULADO` line.
-- Click `Send LoRa (sim)` and `Notify operator (sim)`.
-- Explain: real backend has `action_guard.py` rejecting tool calls without evidence and rate-limiting per zone. The buttons here are explicit demo simulations.
-
-### Beat 7 — Offline / sync (1:20–1:30)
-- Click `Online` pill in header → toggles to `Offline`. Red `SIN CONECTIVIDAD` banner appears, pulsing.
-- Navigate to `Runtime`. Show **Sync status** panel: pending / synced / failed counters.
-- Click `Online` again → flash `Sincronizado` strip appears.
-
-End.
+1. Open `http://localhost:5173`.
+2. Confirm header pill says **`Online`** (green).
+3. Confirm the **bottom nav** reads `Comando · Reporte · Cola (n) · Runtime`.
+4. (Optional) trigger a real incident in Terminal D so the demo isn't sample state:
+   ```bash
+   curl -sf -X POST http://127.0.0.1:8000/api/sites/silverado-fixed-cam-usgs/sample-node-analysis | jq
+   ```
+   If no real alert is present, the dashboard **automatically falls back** to a clearly-labeled `DEMO · sample state` view — that's safe to record too.
 
 ---
 
-## Talk track cheatsheet
+## 2. What Persona C says + clicks (3-min cut)
 
-- "El backend hace la fusión espacial y temporal entre nodo y reporte ciudadano."
-- "Cada alerta lleva el razonamiento de Gemma como traza auditable."
-- "CAP XML válido contra OASIS v1.2, listo para SINAGIR."
-- "Tool calls pasan por action_guard: schema estricto, rate limit, rechazo si la severidad excede la evidencia."
-- "Offline-first: la cola sigue funcionando sin red, sincroniza al volver conectividad."
+### 0:00 – 0:20 · "The 5-second read"
+
+**Click**: nothing yet — just land on `/`.
+
+**Say**: *"Esto es lo que ve el operador en Defensa Civil cuando llega una alerta. En menos de cinco segundos sabe el nivel, el sitio, y el score."*
+
+**Show**: the **RiskBanner** at the top — full-bleed red strip with `CRÍTICO`, score `87%`, site name, summary. If a real alert is loaded, the red strip will pulse softly; if it's demo, the `DEMO · sample state` badge is in the strip's top-right.
+
+### 0:20 – 0:50 · "Why we trust this alert: signal fusion"
+
+**Click**: nothing — point at the panel titled `Fusión de señales`.
+
+**Say**: *"El motor no decide por una sola señal. Acá tenés las tres entradas: la cámara fija detectó cruce de línea crítica, un brigadista mandó el reporte por la app Vigía, y el modelo hidrometeorológico de Open-Meteo da una probabilidad alta. Cada tile tiene su score y cuándo llegó."*
+
+**Show**: the three slate tiles — `cv_node` 87, `vol_report` 62, `hydromet` 45. All three status dots green.
+
+### 0:50 – 1:15 · "Multimodal Gemma narration"
+
+**Click**: nothing — point at the evidence frame.
+
+**Say**: *"Acá Gemma multimodal narra el frame en español. La visión por computadora sigue siendo la fuente del score; Gemma solo describe lo que se ve para que el operador audite la decisión."*
+
+**Show**: the evidence frame with the bottom strip `Gemma · gemma4:e2b · conf 78%` and the Spanish description.
+
+### 1:15 – 1:40 · "Auditable reasoning"
+
+**Click**: nothing — point at `Razonamiento de Gemma` and the numbered list below.
+
+**Say**: *"Cada alerta no-verde lleva su razonamiento de Gemma en español, más una traza determinística de qué reglas dispararon. No es una caja negra: el operador puede defender la decisión ante un superior."*
+
+**Show**: the reasoning summary + the `Traza de auditoría determinística` panel listing `RULE_CRITICAL_LINE_CROSSED`, `RULE_RISE_VELOCITY`, etc., each with `disparada` / `no aplicó`.
+
+### 1:40 – 2:10 · "Function calling — the operator acts"
+
+**Click**: in this order, with about 4 seconds between each:
+1. `Emitir CAP v1.2`
+2. `Disparar sirena`
+3. `Enviar alerta LoRa`
+4. `Notificar Defensa Civil`
+
+After each click, the button spins for ~1s and a `stdout · function_call log` line appears below the action rail.
+
+**Say**: *"Cuando el operador decide actuar, dispara funciones que Gemma 4 también puede invocar autónomamente. Emitir el XML CAP versión 1.2 — ese es el estándar internacional de Common Alerting Protocol, mapeado a SINAGIR. Disparar la sirena vía relay GPIO. Enviar alerta por LoRa a los nodos hermanos. Notificar al webhook de Defensa Civil municipal."*
+
+**Show**: the `Estado CAP v1.2 · export` card flips from idle/emitido as the actions fire, and the `Línea de tiempo del incidente` at the bottom gets new dots.
+
+### 2:10 – 2:30 · "Connectivity loss"
+
+**Click**: header pill `Online` → flips to `Offline`. Wait ~1s.
+
+**Say**: *"Si se cae la conexión, el operador no pierde la vista. Banner rojo `SIN CONECTIVIDAD`, la cola sigue contando reportes locales, y el motor local sigue tomando decisiones. Cuando vuelve la red, se sincroniza solo."*
+
+**Show**: the `SIN CONECTIVIDAD — operación local activa · cola: N` banner under the header. The `Cola offline · última sincronización` card on the right shows offline state.
+
+**Click**: header pill back to `Online`. The green `Sincronizado` flash appears for 2.5s.
+
+### 2:30 – 2:50 · "Lifecycle in one strip"
+
+**Click**: nothing — point at the timeline.
+
+**Say**: *"Toda la historia del incidente en un strip: detección CV, reporte voluntario, fusión, emisión CAP, sirena, notificación. Auditable de punta a punta."*
+
+**Show**: the `Línea de tiempo del incidente` at the bottom, dots in amber for completed events. The events we just triggered are at the right end.
+
+### 2:50 – 3:00 · close
+
+**Say**: *"Acuífero 4 + Vigía: alerta temprana híbrida, on-device, auditable, lista para Defensa Civil."*
 
 ---
 
-## Endpoints hit during the demo
+## 3. Implementation notes
 
-| UI action | Method | Path |
-|-----------|--------|------|
-| Load site | GET | `/api/sites/{id}` |
-| Load hydromet | GET | `/api/sites/{id}/external-snapshot` |
-| Analyze bundled clip | POST | `/api/sites/{id}/sample-node-analysis` |
-| Emit CAP | POST | `/api/cap/emit` |
-| Export SINAGIR | POST | `/api/alerts/{alert_id}/export-sinagir` |
-| Toggle connectivity | POST | `/api/settings/connectivity` |
-| Sync status | GET | `/api/sync/status` |
-| Flush queue | POST | `/api/sync/flush` |
+- **Demo fallback is labeled.** When `useAppStore.alerts` is empty, the dashboard renders `DEMO_ALERT` + `DEMO_FUSION` + `DEMO_TIMELINE` constants from `pages/Dashboard.tsx` with a visible `DEMO · sample state` badge in the RiskBanner. No hidden backend mocking.
+- **Action rail.** Buttons in `Acciones del operador` dispatch a 900ms simulated busy state and log to a `stdout` panel. They do NOT call the backend in this commit — wiring to `POST /api/alerts/{id}/export-sinagir`, `/api/alerts/{id}/siren`, etc. is a follow-up. The visual contract is in place.
+- **Spanish strings.** Every demo-critical label is Spanish: `Incidente activo`, `Fusión de señales`, `Razonamiento de Gemma`, `Traza de auditoría determinística`, `Acciones del operador`, `Emitir CAP v1.2`, `Disparar sirena`, `Enviar alerta LoRa`, `Notificar Defensa Civil`, `Cola offline · última sincronización`, `Línea de tiempo del incidente`, `Sitios monitoreados`, `Abrir sitio`, `Comando`, `Reporte`, `Cola`. The English fragments that remain are deliberate function-call identifiers (`emit_cap_xml`, `function_call`, etc.) — those are operator/dev shibboleths and reading them in Spanish would be wrong.
+- **Responsive.** The `cc-grid` collapses to a single column under 1100px; the fusion row stacks under 720px. The recording target is 1440 × 900 — at that resolution everything above the timeline fits without scrolling.
+- **Build.** Compiles under `noUnusedLocals`, `noUnusedParameters`, `verbatimModuleSyntax`, `erasableSyntaxOnly` per the existing `tsconfig.app.json`.
 
-Siren / LoRa / Notify are explicitly **not** wired to backend endpoints — they push a `SIMULADO` line into the on-screen action log.
+## 4. Files patched
 
----
+| File | Change |
+|---|---|
+| `frontend/src/pages/Dashboard.tsx` | Full rewrite — command center layout, demo fallback, action rail wiring |
+| `frontend/src/pages/SiteDetail.tsx` | Added CAP status card + audit trace at the bottom of the analysis section |
+| `frontend/src/components/Layout.tsx` | Spanish nav labels: Dashboard → Comando, Report → Reporte, Queue → Cola |
+| `frontend/src/components/CommandCenter.tsx` | **NEW.** Reusable atoms — RiskBanner, SignalFusionRow, EvidencePanel, GemmaReasoning, AuditTrace, ActionRail, CapStatusCard, OfflineSyncCard, IncidentTimeline, SectionPanel, EmptyCommandCenter |
+| `frontend/src/index.css` | Added slate/ops palette + 1440×900 grid utilities (`cc-grid`, `cc-fusion`, `cc-action-btn`, severity strips, etc) |
 
-## Known caveats to mention briefly if asked
+## 5. If something looks wrong on the day
 
-- Talking-head and final video ensemble are D+E deliverables, not in this clip.
-- Latency E2E numbers in `docs/writeup.md` are still `[TODO]` until A finalizes Pi benchmarks.
-- LiteRT-LM is the future runtime target; demo runs Gemma 4 through Ollama as the local backend.
+- **Risk strip is wrong color.** The level comes from the live alert. If a real RED alert came in, the strip is RED and pulses. If the level is wrong, run the seed + the sample-node-analysis curl above to force RED.
+- **Action rail does nothing.** Check the browser console for React errors. Buttons are pure UI in this commit and won't fail silently — every click writes to the `stdout` panel.
+- **Spanish strings are wrong.** Search `frontend/src/pages/Dashboard.tsx` and `components/CommandCenter.tsx` for the label and fix in place — there's no i18n indirection.
+- **No timeline events.** Timeline is initialized from `DEMO_TIMELINE_FACTORY()`. To restart, refresh the page. New events appear when action-rail buttons are clicked.

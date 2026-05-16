@@ -45,9 +45,9 @@ export default function Layout() {
   };
 
   const navItems = [
-    { path: '/', label: 'Dashboard', icon: <Activity className="w-5 h-5" /> },
-    { path: '/report', label: 'Report', icon: <FileText className="w-5 h-5" /> },
-    { path: '/queue', label: `Queue (${queueCount})`, icon: <UploadCloud className="w-5 h-5" /> },
+    { path: '/', label: 'Comando', icon: <Activity className="w-5 h-5" /> },
+    { path: '/report', label: 'Reporte', icon: <FileText className="w-5 h-5" /> },
+    { path: '/queue', label: `Cola (${queueCount})`, icon: <UploadCloud className="w-5 h-5" /> },
     { path: '/settings', label: 'Runtime', icon: <Settings className="w-5 h-5" /> },
   ];
 
