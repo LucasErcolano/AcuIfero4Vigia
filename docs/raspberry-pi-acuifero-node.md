@@ -35,10 +35,18 @@ Measured Raspberry Pi 5 status on this branch:
 
 - `ACUIFERO_NODE_BACKEND=gpu` works for LiteRT text inference.
 - `ACUIFERO_NODE_BACKEND=cpu` fails during engine creation on this device.
+- `litert-lm-api==0.11.0` is installed in `backend/.venv`.
+- Verified model path: `~/AcuIfero4Vigia-litert/backend/data/models/gemma-4-E2B-it.litertlm`.
+- Verified sample clip path:
+  `~/AcuIfero4Vigia-litert/fixtures/media/usgs_silverado_fire_2015_fixed_cam.mp4`.
 - Gemma 4 E2B multimodal still fails on Pi 5 because LiteRT picks Mesa
   `llvmpipe` WebGPU and the vision encoder exceeds the available buffer size.
-- Longer non-green reasoning prompts still fall back because LiteRT text decode
-  on this Pi can time out or abort after prefill.
+- Generic cold text smoke is real LiteRT inference but slow on this Pi:
+  `elapsed_seconds=130` in the measured run.
+- Acuifero alert reasoning text now has a Pi-short prompt. A measured run with
+  `ACUIFERO_NODE_MAX_OUTPUT_TOKENS=256` produced `reasoning_model=gemma-4-E2B-it.litertlm`
+  in `350.18s` with about `3120 MB` max RSS. This is real LiteRT-LM inference,
+  but too slow to claim stable operational latency on Raspberry Pi 5 8 GB.
 - Result today: `sample-node-analysis` reaches conservative fallback
   (`runner.mode=multimodal-unavailable-fallback`) on this exact hardware/model
   pairing.
@@ -73,6 +81,31 @@ python scripts/litert_smoke.py
 This project uses the Python API (`litert-lm-api==0.11.0`) for production node
 inference. Ollama remains acceptable only as an explicit development path for
 Vigia or local experimentation, not as the Acuifero production engine on the Pi.
+
+## Reproduce measured LiteRT inference on the Pi
+
+From `~/AcuIfero4Vigia-litert`:
+
+```bash
+export PYTHONPATH=$PWD/backend/src
+export ACUIFERO_NODE_PROVIDER=litert
+export ACUIFERO_NODE_MODEL_PATH=$PWD/backend/data/models/gemma-4-E2B-it.litertlm
+export ACUIFERO_NODE_BACKEND=gpu
+export ACUIFERO_NODE_VISION_BACKEND=gpu
+export ACUIFERO_NODE_CACHE_DIR=$PWD/backend/data/litert-cache
+export ACUIFERO_NODE_MAX_OUTPUT_TOKENS=256
+backend/.venv/bin/python scripts/litert_smoke.py --reasoning
+```
+
+Expected success signal:
+
+- first JSON: `health.reachable=true`, `health.provider=litert`, `health.backend=gpu`
+- second JSON: `result.model_name=gemma-4-E2B-it.litertlm`
+- `benchmark.elapsed_seconds` is measured wall-clock time for the call
+
+This command does not start or query Ollama. If LiteRT fails, the result is
+`model_name=rule-fallback`; that is a failure to count as P1 evidence, not an
+automatic production fallback to Ollama.
 
 ## First boot
 

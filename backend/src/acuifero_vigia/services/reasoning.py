@@ -27,9 +27,10 @@ class ReasoningBlock:
 
 
 SYSTEM_PROMPT_ES = (
-    "Explica alerta hidrica en espanol rioplatense. Maximo 2 oraciones. "
-    "Cita senales exactas por nombre. Luego agrega una linea 'Cadena:' con 2 o 3 "
-    "pasos separados por ' -> '. Sin markdown ni datos inventados."
+    "Sos Gemma en el nodo Acuifero. Responde en espanol. "
+    "Usa maximo 35 palabras. Cita senales por nombre. "
+    "Formato exacto: Resumen: ... Cadena: paso1 -> paso2. "
+    "Sin markdown ni datos inventados."
 )
 
 
@@ -141,7 +142,7 @@ def generate_alert_reasoning(
         return _fallback(level, rules_fired)
 
     user_prompt = _render_inputs(node_obs, volunteer_parsed, hydromet, fused_score, level, rules_fired)
-    raw = llm.generate_text(SYSTEM_PROMPT_ES, user_prompt, max_tokens=320)
+    raw = llm.generate_text(SYSTEM_PROMPT_ES, user_prompt, max_tokens=192)
     if not raw:
         return _fallback(level, rules_fired)
 
