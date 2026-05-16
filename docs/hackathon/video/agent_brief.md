@@ -25,6 +25,7 @@ an offline-first flood early-warning MVP for Argentina's Litoral.
 
 ## Inputs you must read
 
+- `DESIGN.md`
 - `timeline.md`
 - `narration.md`
 - `shot_list.md`
@@ -33,6 +34,8 @@ an offline-first flood early-warning MVP for Argentina's Litoral.
 - `visual_prompts.md`
 - `claims_guardrail.md`
 - `ui_scenes/*.html`
+- `roles/*.md`
+- `handoffs/*`
 - `edit/project.md`
 - `edit/edl.json`
 
