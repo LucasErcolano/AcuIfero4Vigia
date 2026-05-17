@@ -10,8 +10,6 @@ dependencies = [
     "sqlmodel",
     "pydantic",
     "pillow",
-    "numpy",
-    "opencv-python-headless",
     "python-multipart",
     "aiofiles",
     "httpx",

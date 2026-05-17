@@ -277,7 +277,7 @@ class MultimodalEvidenceBuilder:
             "calibration_available": calibration is not None,
             "calibration_notes": getattr(calibration, "notes", None),
             "profile": self.settings.acuifero_node_profile,
-            "deterministic_prefilter": firewall.to_dict(),
+            "deterministic_prefilter": firewall.to_dict(include_frames=False),
         }
         trace = [
             "multimodal pipeline selected",

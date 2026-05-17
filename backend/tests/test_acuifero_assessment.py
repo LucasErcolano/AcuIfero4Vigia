@@ -17,7 +17,7 @@ from acuifero_vigia.services.acuifero_assessment import (
     TemporalEvidencePack,
     _run_ffmpeg_extract,
 )
-from acuifero_vigia.services.deterministic_firewall import _CV2_AVAILABLE
+_NUMPY_AVAILABLE = True  # firewall now runs in a subprocess; main process never imports numpy
 
 
 @pytest.fixture(autouse=True)
@@ -68,7 +68,7 @@ def test_multimodal_evidence_builder_curates_image(tmp_path: Path):
     assert len(pack.selected_frames) == 1
     assert Path(pack.selected_frames[0].frame_path).exists()
     assert Path(pack.evidence_frame_path).exists()
-    if _CV2_AVAILABLE:
+    if _NUMPY_AVAILABLE:
         assert pack.summary_metrics["opencv_used"] is True
         assert pack.summary_metrics["deterministic_prefilter"]["water_level"] in {"low", "elevated", "critical"}
         assert ratio_hint >= 0

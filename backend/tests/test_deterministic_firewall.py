@@ -1,19 +1,18 @@
 from __future__ import annotations
 
 import pytest
-
-cv2 = pytest.importorskip("cv2")
-np = pytest.importorskip("numpy")
+from PIL import Image, ImageDraw
 
 from acuifero_vigia.services.deterministic_firewall import analyze_frames
 
 
 def _write_frame(tmp_path, idx: int, waterline_row: int, width: int = 320, height: int = 240):
-    image = np.full((height, width, 3), 220, dtype=np.uint8)
-    image[waterline_row:, :, :] = 40
-    image[waterline_row - 1 : waterline_row + 1, :, :] = 0
+    image = Image.new("RGB", (width, height), (220, 220, 220))
+    draw = ImageDraw.Draw(image)
+    draw.rectangle((0, waterline_row, width - 1, height - 1), fill=(40, 40, 40))
+    draw.rectangle((0, waterline_row - 1, width - 1, waterline_row + 1), fill=(0, 0, 0))
     path = tmp_path / f"frame_{idx:03d}.png"
-    cv2.imwrite(str(path), image)
+    image.save(path)
     return str(path)
 
 
