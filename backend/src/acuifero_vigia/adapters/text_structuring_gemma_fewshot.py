@@ -13,7 +13,13 @@ import json
 import os
 from typing import Any
 
+from typing import Protocol
+
 from acuifero_vigia.adapters.llm import OpenAICompatibleLLM
+
+
+class _TextGenClient(Protocol):
+    def generate_text(self, system_prompt: str, user_prompt: str, max_tokens: int = ...) -> str | None: ...
 
 
 def _resolve_fewshot_count(total: int) -> int:
@@ -222,7 +228,7 @@ class GemmaFewShotTextStructurer:
     `services.report_structuring` picks it up unchanged.
     """
 
-    def __init__(self, llm: OpenAICompatibleLLM) -> None:
+    def __init__(self, llm: _TextGenClient | OpenAICompatibleLLM) -> None:
         self._llm = llm
 
     def structure_observation(self, transcript: str, site_context: dict[str, Any]) -> dict[str, Any] | None:

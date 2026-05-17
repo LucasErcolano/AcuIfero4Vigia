@@ -36,8 +36,8 @@ def _build_acuifero_runtime_components() -> tuple[object, GemmaImageAssessmentAd
 
 
 llm_client = OpenAICompatibleLLM()
-text_structurer = GemmaFewShotTextStructurer(llm_client)
 acuifero_node_runtime = LiteRTNodeRuntime()
+text_structurer = GemmaFewShotTextStructurer(llm_client)
 acuifero_runner, acuifero_image_assessor = _build_acuifero_runtime_components()
 image_assessor = GemmaImageAssessmentAdapter()
 asr_client = FasterWhisperASRAdapter()
@@ -51,9 +51,12 @@ is_online = True
 
 
 def get_decision_runtime() -> OpenAICompatibleLLM | LiteRTNodeRuntime:
-    settings = get_settings()
-    if settings.acuifero_node_provider == "litert":
-        return acuifero_node_runtime
+    """Central reasoning + actuator runtime.
+
+    Topology: Acuifero (fixed-cam Pi) runs the LiteRT vision engine; the central
+    backend runs the larger Gemma 4 model via Ollama for fusion reasoning and
+    actuator JSON tool selection. Vision and central reasoning are split engines.
+    """
     return llm_client
 
 
