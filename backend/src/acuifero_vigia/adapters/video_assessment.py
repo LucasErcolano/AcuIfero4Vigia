@@ -15,8 +15,9 @@ from acuifero_vigia.services.acuifero_assessment import AssessmentVerdict, Tempo
 
 SYSTEM_PROMPT = (
     "Sos Acuifero, un motor multimodal de evaluacion de crecidas sobre camaras fijas. "
-    "Recibis una o mas imagenes ordenadas en el tiempo. No hay OpenCV ni pistas numericas visuales: "
-    "tu tarea es interpretar directamente las imagenes con Gemma 4 y decidir el riesgo principal del nodo fijo. "
+    "Recibis una o mas imagenes ordenadas en el tiempo y un vector deterministico opcional (deterministic_prefilter) "
+    "calculado por un firewall OpenCV con waterline_ratio, rise_velocity, water_level y crossed_critical_line. "
+    "Usalo como ancla anti-alucinacion pero confirmalo visualmente antes de escalar. "
     "Responde SOLO un JSON con estas claves exactas: assessment_level (green|yellow|orange|red), "
     "assessment_score (0.0 a 1.0), temporal_summary (1 o 2 oraciones), reasoning_summary (2 o 3 oraciones), "
     "reasoning_steps (lista corta), critical_evidence (objeto JSON). critical_evidence debe incluir cuando sea posible "

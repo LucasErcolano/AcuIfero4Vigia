@@ -14,6 +14,7 @@ from PIL import Image, ImageOps
 
 from acuifero_vigia.core.settings import get_settings
 from acuifero_vigia.models.domain import Site, SiteCalibration
+from acuifero_vigia.services.deterministic_firewall import FirewallResult, analyze_frames
 from acuifero_vigia.services.storage import get_upload_dir, persist_json_artifact
 
 
@@ -239,21 +240,24 @@ class MultimodalEvidenceBuilder:
                     )
                 )
 
+        firewall: FirewallResult = analyze_frames(selected_paths, float(sample_seconds))
+
         selected_frames: list[EvidenceFrame] = []
         dimensions: list[dict[str, int]] = []
         for index, frame_path in enumerate(selected_paths, start=1):
             width, height = _image_size(Path(frame_path))
             dimensions.append({"width": width, "height": height})
+            fm = firewall.frames[index - 1] if index - 1 < len(firewall.frames) else None
             selected_frames.append(
                 EvidenceFrame(
                     frame_path=frame_path,
                     timestamp_s=round((index - 1) * sample_seconds, 2),
-                    brightness=-1.0,
-                    contrast=-1.0,
-                    motion_score=-1.0,
-                    edge_strength=-1.0,
-                    waterline_ratio_hint=-1.0,
-                    waterline_y=-1,
+                    brightness=fm.brightness if fm else -1.0,
+                    contrast=fm.contrast if fm else -1.0,
+                    motion_score=fm.motion_score if fm else -1.0,
+                    edge_strength=fm.edge_strength if fm else -1.0,
+                    waterline_ratio_hint=fm.waterline_ratio if fm else -1.0,
+                    waterline_y=fm.waterline_y if fm else -1,
                 )
             )
 
@@ -262,8 +266,8 @@ class MultimodalEvidenceBuilder:
         started_at = ended_at - timedelta(seconds=duration_seconds)
         evidence_frame_path = selected_paths[-1]
         summary_metrics = {
-            "mode": "gemma4-multimodal-only",
-            "opencv_used": False,
+            "mode": "gemma4-multimodal-with-firewall" if firewall.opencv_used else "gemma4-multimodal-only",
+            "opencv_used": firewall.opencv_used,
             "source_media": str(source_path),
             "sample_seconds": sample_seconds,
             "requested_frames": max_frames,
@@ -273,12 +277,17 @@ class MultimodalEvidenceBuilder:
             "calibration_available": calibration is not None,
             "calibration_notes": getattr(calibration, "notes", None),
             "profile": self.settings.acuifero_node_profile,
+            "deterministic_prefilter": firewall.to_dict(),
         }
         trace = [
-            "multimodal-only pipeline selected",
-            f"extracted {len(selected_frames)} frame(s) without OpenCV",
+            "multimodal pipeline selected",
+            f"extracted {len(selected_frames)} frame(s)",
+            f"deterministic firewall: opencv_used={firewall.opencv_used} "
+            f"waterline_ratio={firewall.waterline_ratio:.3f} "
+            f"rise_velocity={firewall.rise_velocity:+.4f}/s "
+            f"water_level={firewall.water_level} crossed={firewall.crossed_critical_line}",
             f"optimized frames to max_side={self.settings.acuifero_multimodal_image_max_side}px",
-            "Gemma 4 multimodal is responsible for visual interpretation and alert scoring",
+            "Gemma 4 multimodal consumes frames plus firewall vector for visual interpretation",
         ]
         pack = TemporalEvidencePack(
             site_id=site.id,
@@ -300,7 +309,14 @@ class MultimodalEvidenceBuilder:
                 evidence_frame_path=evidence_frame_path,
             ),
         )
-        return pack, 0.0, 0.0, False, 0.0, trace
+        return (
+            pack,
+            firewall.waterline_ratio,
+            firewall.rise_velocity,
+            firewall.crossed_critical_line,
+            firewall.confidence,
+            trace,
+        )
 
 
 class AcuiferoAssessmentEngine:
@@ -325,6 +341,7 @@ class AcuiferoAssessmentEngine:
             calibration=calibration,
             source_type=source_type,
         )
+        firewall_block = pack.summary_metrics.get("deterministic_prefilter", {})
         verdict = self.runner.assess(pack)
         if verdict is None:
             verdict = self._fallback_verdict(pack)
@@ -335,6 +352,8 @@ class AcuiferoAssessmentEngine:
             rise_velocity_hint = _safe_float(verdict.critical_evidence.get("rise_velocity"), rise_velocity_hint)
             crossed_hint = _safe_bool(verdict.critical_evidence.get("crossed_critical_line"), crossed_hint)
             confidence = _safe_float(verdict.critical_evidence.get("confidence"), verdict.assessment_score)
+        if firewall_block:
+            verdict.critical_evidence.setdefault("deterministic_prefilter", firewall_block)
 
         manifest_payload = {
             "bundle": self._serialize_pack(pack),
