@@ -53,9 +53,9 @@ PYTHONPATH=backend/src backend/.venv/bin/python scripts/litert_benchmark.py \
   --output docs/hackathon/litert-e2b-pi5-8gb-image.jsonl
 ```
 
-To test another model later, pass `--model-path /path/to/model.litertlm` or set
-`ACUIFERO_NODE_MODEL_PATH`. This is only prepared for later E4B comparison; this
-card does not claim E4B results yet.
+To test another model, pass `--model-path /path/to/model.litertlm` or set
+`ACUIFERO_NODE_MODEL_PATH`. The E2B/E4B comparison for the Pi 5 8GB operating
+profile is documented in [`e2b-e4b-ablation.md`](./e2b-e4b-ablation.md).
 
 ## Metrics
 
@@ -93,6 +93,11 @@ speculative decoding did not fix shared-engine reuse. Running each repeat with
 same Python process, so comparable repeated text/reasoning numbers should use
 that option until the LiteRT-LM GPU text-engine reuse issue is resolved. The
 image/multimodal CPU/CPU mode succeeded on both cold and warm runs.
+
+Production mitigation: `LiteRTNodeRuntime` now resets the affected cached engine
+and retries once when this GPU text-engine reuse error appears. The retry keeps
+the backend from falling straight to deterministic reasoning, but it can make
+the second call slower and raise process RSS because the engine is recreated.
 
 ## Initial E2B Table
 

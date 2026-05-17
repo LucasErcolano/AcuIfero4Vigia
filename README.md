@@ -156,6 +156,27 @@ Measured end-to-end Acuifero endpoint evidence on Raspberry Pi 5:
 - this endpoint result is the Acuifero full-flow P1 proof; the
   `litert_smoke.py --image` command is only a one-image runtime smoke test
 
+Benchmark and ablation evidence:
+
+- `docs/hackathon/benchmark-card.md` records the measured Pi 5 8 GB LiteRT-LM
+  E2B runs. The current Python response path does not expose reliable token
+  counts or streaming callbacks, so TTFT and decode tok/s are documented as not
+  measured instead of estimated.
+- Reusing the same GPU text engine in one process produced
+  `RuntimeError: litert_lm_conversation_send_message failed`; the runtime now
+  resets that cached engine and retries once. This avoids a direct fallback, but
+  the retry path can add latency and increase process RSS.
+- `docs/hackathon/e2b-e4b-ablation.md` keeps E2B as the Pi 5 8 GB operating
+  profile. E4B GPU text/reasoning failed with WebGPU buffer/command errors on
+  this hardware; E4B CPU and multimodal CPU/CPU are recorded only as fallback or
+  Pi 16 GB / workstation candidates.
+- Production actuator selection with `ACUIFERO_NODE_PROVIDER=litert` no longer
+  calls Ollama. The current path is strict JSON structured tool selection
+  through LiteRT, not native LiteRT function calling exposed by this wrapper.
+  Real Pi smoke did not confirm parseable actuator JSON before external
+  timeouts, so orange/red alerts retain deterministic recommended-actuator
+  fallback for continuity.
+
 For local development only, Acuifero can also be forced onto the old Ollama
 path with `ACUIFERO_NODE_PROVIDER=ollama`. That mode is not a production Pi
 runtime and is never used as an automatic fallback from LiteRT.
@@ -383,3 +404,11 @@ cd frontend && npm run lint
 - The fixed-node runtime now targets LiteRT-LM via the Python API; the generic upstream artifact wired here is `gemma-4-E2B-it.litertlm`.
 - Hydromet data is real but model-based; it is not a replacement for a local gauging station.
 - Raspberry Pi 8 GB remains a constrained profile, so the default path keeps a single curated frame, uses GPU for text/reasoning checks, and uses CPU for LiteRT multimodal image inference with speculative decoding enabled.
+- LiteRT-LM benchmark output currently lacks reliable TTFT and decode tok/s
+  because this wrapper receives only final responses; wall-clock and RSS are the
+  measured quantitative evidence.
+- E4B is not the Pi 5 8 GB production profile. It is documented as an ablation
+  with GPU failures and CPU fallback measurements.
+- LiteRT actuator selection is structured JSON prompting, not native function
+  calling through a public wrapper API; deterministic fallback preserves
+  orange/red actuation when model selection times out or returns malformed JSON.

@@ -106,8 +106,8 @@ Recommendation: keep E2B as the Pi 5 8GB operational profile. Treat E4B as a
 candidate for Raspberry Pi 16GB / workstation validation, or as a CPU fallback
 for very narrow prompts only after more end-to-end testing.
 
-Technical follow-up: add retry/engine reset behavior to `LiteRTNodeRuntime` for
-the GPU text-engine reuse issue. This does not block P14 because the benchmark
-uses `--fresh-runtime-per-run`, but the production backend should reset the
-engine after `RuntimeError: litert_lm_conversation_send_message failed` if real
-multi-call text/reasoning flow needs to reuse the same process.
+Runtime follow-up status: the GPU text-engine reuse issue is mitigated in
+`LiteRTNodeRuntime` by discarding the affected cached engine and retrying once
+after `RuntimeError: litert_lm_conversation_send_message failed`. Pi validation
+confirmed repeated text/reasoning calls no longer fall straight to fallback, but
+the reset path has higher latency and process RSS because it reloads the engine.
