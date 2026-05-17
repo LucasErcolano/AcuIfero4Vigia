@@ -44,17 +44,37 @@ export interface FusedAlert {
   reasoning_model?: string | null;
 }
 
+export interface SyncStatus {
+  pending: number;
+  synced: number;
+  failed: number;
+}
+
+export interface CapEmitRequest {
+  site_id?: string;
+  lat?: number;
+  lon?: number;
+  severity?: 'minor' | 'moderate' | 'severe';
+  headline?: string;
+  instruction?: string;
+  summary?: string;
+  areaDesc?: string;
+}
+
 interface AppState {
   isOnline: boolean;
   sites: Site[];
   alerts: FusedAlert[];
   queueCount: number;
+  syncStatus: SyncStatus | null;
   setOnline: (status: boolean) => void;
   fetchSites: () => Promise<void>;
   fetchAlerts: () => Promise<void>;
   checkConnectivity: () => Promise<void>;
   updateQueueCount: () => Promise<void>;
   flushQueue: () => Promise<void>;
+  fetchSyncStatus: () => Promise<void>;
+  emitCap: (payload: CapEmitRequest) => Promise<string>;
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -62,6 +82,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   sites: [],
   alerts: [],
   queueCount: 0,
+  syncStatus: null,
 
   setOnline: (status) => set({ isOnline: status }),
 
@@ -160,5 +181,29 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
 
     await updateQueueCount();
+  },
+
+  fetchSyncStatus: async () => {
+    try {
+      const res = await fetch(`${API_BASE}/sync/status`);
+      if (res.ok) {
+        const data = (await res.json()) as SyncStatus;
+        set({ syncStatus: data });
+      }
+    } catch (err) {
+      console.error('Failed to fetch sync status', err);
+    }
+  },
+
+  emitCap: async (payload) => {
+    const res = await fetch(`${API_BASE}/cap/emit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload ?? {}),
+    });
+    if (!res.ok) {
+      throw new Error(`CAP emit failed: ${res.status}`);
+    }
+    return res.text();
   },
 }));

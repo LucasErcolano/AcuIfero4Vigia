@@ -16,6 +16,54 @@ Good Hackathon (Global Resilience track, LiteRT Prize).
 
 Connectivity-loss demo: [`scripts/demo_connectivity.py`](scripts/demo_connectivity.py) runs the full `wifi-off -> local alert -> siren -> wifi-on -> queue drain` narrative in under 90 s.
 
+## Repository layout
+
+```
+backend/    FastAPI service (Python 3.10+, uv): node analysis, alerts, sync
+frontend/   PWA dashboard (Vite + TS): operator UI for sites and queue
+android/    Volunteer Android app (Compose + MediaPipe LLM Inference)
+scripts/    Pi node runners, demo, setup, dev, fetch assets
+shared/     Cross-component JSON schemas
+fixtures/   Demo media/frames (gitignored, fetched on demand)
+datasets/   Rioplatense eval corpus
+docs/       Architecture, hackathon notes, demo script, PDF summaries
+docker-compose.yml  Dev orchestration for backend + optional Ollama
+.env.example        Copy to .env, fill local secrets (never commit .env)
+```
+
+## Architecture (high-level)
+
+```
+   +----------------+        +-------------------+        +-------------+
+   | Fixed camera   | ffmpeg | Acuifero edge (Pi)|  HTTP  |  Backend    |
+   | (RTSP/USB)     +------->| node_guard.py     +------->|  FastAPI    |
+   +----------------+        | + Gemma 4 (Ollama)|        |  + SQLite   |
+                             +-------------------+        |  + DecisionE|
+                                                          +------+------+
+   +----------------+        +-------------------+               |
+   | Volunteer      |  PWA   | Android (Compose) |  HTTP/queue   |
+   | (Vigia)        +------->| MediaPipe LLM     +-------------->|
+   +----------------+        | (Gemma E2B/E4B)   |               |
+                             +-------------------+        +------v------+
+                                                          | Alerts/CAP  |
+                                                          | SINAGIR exp |
+                                                          +-------------+
+```
+
+Stack: Gemma 4 (E2B/E4B) via Ollama and MediaPipe LLM Inference, LiteRT-LM
+(stub runner target), FastAPI, SQLite, React/Vite PWA, Jetpack Compose, CAP v1.2.
+
+## Quick start (Docker)
+
+```bash
+cp .env.example .env
+docker compose --profile llm up
+# Backend at http://localhost:8000, Ollama at http://localhost:11434
+docker exec acuifero-ollama ollama pull gemma4:e2b
+```
+
+For native dev per component, see the sections below.
+
 ## Overview
 
 The system has three real signal paths:

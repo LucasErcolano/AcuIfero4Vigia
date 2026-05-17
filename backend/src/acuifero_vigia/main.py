@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from acuifero_vigia.api.routers import acuifero, alerts, runtime, sites, sync, vigia
+from acuifero_vigia.api.routers import acuifero, alerts, cap, demo_inject, runtime, sites, sync, vigia
 from acuifero_vigia.db.database import init_db
 from acuifero_vigia.services.storage import get_fixture_dir, get_upload_dir
 
@@ -39,8 +39,14 @@ for router in (
     vigia.router,
     alerts.router,
     sync.router,
+    cap.router,
 ):
     app.include_router(router, prefix="/api")
+
+app.include_router(cap.router)
+
+if demo_inject.demo_inject_enabled():
+    app.include_router(demo_inject.router, prefix="/api")
 
 
 # Backward-compatible aliases for older tests/scripts that import from main.py.

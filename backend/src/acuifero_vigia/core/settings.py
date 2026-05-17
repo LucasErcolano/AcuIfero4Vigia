@@ -182,7 +182,7 @@ def get_settings() -> Settings:
             os.environ.get("ACUIFERO_MULTIMODAL_NUM_CTX", "1024" if is_pi8_demo_profile else "4096")
         ),
         acuifero_multimodal_num_predict=int(
-            os.environ.get("ACUIFERO_MULTIMODAL_NUM_PREDICT", "192" if is_pi8_demo_profile else "512")
+            os.environ.get("ACUIFERO_MULTIMODAL_NUM_PREDICT", "512")
         ),
         acuifero_multimodal_timeout_seconds=float(
             os.environ.get("ACUIFERO_MULTIMODAL_TIMEOUT_SECONDS", "300" if is_pi8_demo_profile else "180")

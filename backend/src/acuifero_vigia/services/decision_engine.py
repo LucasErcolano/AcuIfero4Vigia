@@ -457,10 +457,14 @@ def recompute_site_alert(
     weighted_score, trigger_source, rules_fired = _score_events(events)
     level = level_from_score(weighted_score)
     local_alarm_triggered = level in {"orange", "red"}
-    summary_parts = [event.summary for event in events if event.summary]
+    latest_by_source: dict[str, EvidenceEvent] = {}
+    for event in events:
+        latest_by_source.setdefault(event.source, event)
+
+    summary_parts = [event.summary for event in latest_by_source.values() if event.summary]
     summary = " | ".join(summary_parts[:3]) or "No recent signals available"
 
-    representative = {event.source: event.payload for event in events}
+    representative = {source: event.payload for source, event in latest_by_source.items()}
     reasoning = generate_alert_reasoning(
         level=level,
         fused_score=weighted_score,
