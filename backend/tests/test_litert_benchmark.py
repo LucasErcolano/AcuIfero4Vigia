@@ -74,3 +74,88 @@ def test_benchmark_record_reports_multimodal_missing_image(tmp_path: Path):
     assert record["mode"] == "image"
     assert record["pass"] is False
     assert "image path does not exist" in record["error_detail"]
+
+
+def test_benchmark_records_runtime_error_detail(monkeypatch, tmp_path: Path):
+    module = _load_benchmark_module()
+
+    model_path = tmp_path / "gemma-4-E2B-it.litertlm"
+    model_path.write_bytes(b"fake-model")
+    settings = SimpleNamespace(
+        acuifero_node_provider="litert",
+        acuifero_node_model_path=model_path,
+        acuifero_node_backend="gpu",
+        acuifero_node_multimodal_backend="cpu",
+        acuifero_node_multimodal_vision_backend="cpu",
+        acuifero_node_enable_speculative_decoding=True,
+        acuifero_node_max_output_tokens=1024,
+        acuifero_node_multimodal_max_output_tokens=2048,
+    )
+
+    class FakeRuntime:
+        model_name = model_path.name
+
+        def __init__(self):
+            self.settings = settings
+            self.last_error_type = "RuntimeError"
+            self.last_error_detail = "engine conversation closed"
+            self.last_response_type = None
+            self.last_response_preview = None
+
+        def health(self):
+            return SimpleNamespace(reachable=True, detail="ready")
+
+        def generate_text(self, _system_prompt, _user_prompt, max_tokens=320):
+            return None
+
+    monkeypatch.setattr(module, "LiteRTNodeRuntime", FakeRuntime)
+
+    record = module.run_benchmark_modes(["text"], repeats=1)[0]
+
+    assert record["pass"] is False
+    assert "RuntimeError" in record["error_detail"]
+    assert "engine conversation closed" in record["error_detail"]
+
+
+def test_benchmark_can_use_fresh_runtime_per_run(monkeypatch, tmp_path: Path):
+    module = _load_benchmark_module()
+
+    model_path = tmp_path / "gemma-4-E2B-it.litertlm"
+    model_path.write_bytes(b"fake-model")
+    settings = SimpleNamespace(
+        acuifero_node_provider="litert",
+        acuifero_node_model_path=model_path,
+        acuifero_node_backend="gpu",
+        acuifero_node_multimodal_backend="cpu",
+        acuifero_node_multimodal_vision_backend="cpu",
+        acuifero_node_enable_speculative_decoding=True,
+        acuifero_node_max_output_tokens=1024,
+        acuifero_node_multimodal_max_output_tokens=2048,
+    )
+    init_count = 0
+
+    class FakeRuntime:
+        model_name = model_path.name
+
+        def __init__(self):
+            nonlocal init_count
+            init_count += 1
+            self.settings = settings
+            self.last_error_type = None
+            self.last_error_detail = None
+            self.last_response_type = None
+            self.last_response_preview = None
+
+        def health(self):
+            return SimpleNamespace(reachable=True, detail="ready")
+
+        def generate_text(self, _system_prompt, _user_prompt, max_tokens=320):
+            return "ok"
+
+    monkeypatch.setattr(module, "LiteRTNodeRuntime", FakeRuntime)
+
+    records = module.run_benchmark_modes(["text"], repeats=2, fresh_runtime_per_run=True)
+
+    assert init_count == 2
+    assert [record["runtime_reuse_mode"] for record in records] == ["fresh-per-run", "fresh-per-run"]
+    assert [record["run_temperature"] for record in records] == ["cold", "cold"]

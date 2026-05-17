@@ -32,6 +32,15 @@ backend/.venv/bin/python scripts/litert_benchmark.py \
   --mode reasoning \
   --repeats 2 \
   --output docs/hackathon/litert-e2b-pi5-8gb-reasoning.jsonl
+
+# Use this for comparable repeated text/reasoning measurements on the current
+# Pi 5 GPU runtime, because shared text-engine warm calls are unstable.
+backend/.venv/bin/python scripts/litert_benchmark.py \
+  --mode text \
+  --mode reasoning \
+  --repeats 2 \
+  --fresh-runtime-per-run \
+  --output docs/hackathon/litert-e2b-pi5-8gb-fresh-runtime.jsonl
 ```
 
 If a frame asset is present, add multimodal:
@@ -76,10 +85,14 @@ memory ceiling for the benchmark process, not as an isolated per-run allocation
 delta.
 
 Observed stability note: in the measured Pi run, text and reasoning cold runs
-returned LiteRT output, but the second warm call through the same text engine
-returned no usable text after about 20 seconds. This is recorded as a failed
-warm run in JSONL rather than being smoothed over. The image/multimodal CPU/CPU
-mode succeeded on both cold and warm runs.
+returned LiteRT output, but the second call through the same GPU text engine
+failed after about 20 seconds with
+`RuntimeError: litert_lm_conversation_send_message failed`. Disabling
+speculative decoding did not fix shared-engine reuse. Running each repeat with
+`--fresh-runtime-per-run` made repeated text and reasoning calls pass in the
+same Python process, so comparable repeated text/reasoning numbers should use
+that option until the LiteRT-LM GPU text-engine reuse issue is resolved. The
+image/multimodal CPU/CPU mode succeeded on both cold and warm runs.
 
 ## Initial E2B Table
 

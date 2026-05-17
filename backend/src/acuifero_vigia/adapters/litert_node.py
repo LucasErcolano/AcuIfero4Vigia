@@ -31,6 +31,10 @@ class LiteRTNodeRuntime:
         self._lock = threading.RLock()
         self._module = None
         self._engines: dict[str, Any] = {}
+        self.last_error_type: str | None = None
+        self.last_error_detail: str | None = None
+        self.last_response_type: str | None = None
+        self.last_response_preview: str | None = None
 
     @property
     def model_name(self) -> str:
@@ -125,6 +129,10 @@ class LiteRTNodeRuntime:
 
     def _send_message(self, message: Any, *, multimodal: bool = False, max_tokens: int = 320) -> Any:
         _ = max_tokens
+        self.last_error_type = None
+        self.last_error_detail = None
+        self.last_response_type = None
+        self.last_response_preview = None
         if self.settings.acuifero_node_provider != "litert":
             return None
 
@@ -134,8 +142,13 @@ class LiteRTNodeRuntime:
                 if engine is None:
                     return None
                 with engine.create_conversation() as conversation:
-                    return conversation.send_message(message)
+                    response = conversation.send_message(message)
+                    self.last_response_type = type(response).__name__
+                    self.last_response_preview = str(response)[:500] if response is not None else None
+                    return response
         except Exception as exc:
+            self.last_error_type = type(exc).__name__
+            self.last_error_detail = str(exc)
             _LOGGER.warning(
                 "LiteRT node message failed mode=%s backend=%s model=%s error=%s",
                 "multimodal" if multimodal else "text",

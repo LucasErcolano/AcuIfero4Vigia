@@ -87,6 +87,7 @@ def _base_record(
         "mode": mode,
         "run_index": run_index,
         "run_temperature": run_temperature,
+        "runtime_reuse_mode": None,
         **_settings_fields(runtime, mode),
         "wall_clock_elapsed_seconds": None,
         "rss_peak_mb": None,
@@ -99,6 +100,10 @@ def _base_record(
         "ttft_detail": TTFT_DETAIL,
         "pass": False,
         "error_detail": None,
+        "runtime_error_type": None,
+        "runtime_error_detail": None,
+        "runtime_response_type": None,
+        "runtime_response_preview": None,
         "output_preview": None,
     }
 
@@ -110,10 +115,27 @@ def _preview(value: Any) -> str | None:
     return text[:500]
 
 
+def _runtime_detail(runtime: LiteRTNodeRuntime, default_error: str) -> str:
+    error_type = getattr(runtime, "last_error_type", None)
+    error_detail = getattr(runtime, "last_error_detail", None)
+    response_type = getattr(runtime, "last_response_type", None)
+    response_preview = getattr(runtime, "last_response_preview", None)
+    parts = [default_error]
+    if error_type or error_detail:
+        parts.append(f"runtime_error={error_type or 'unknown'}: {error_detail or ''}".strip())
+    elif response_type or response_preview:
+        parts.append(f"runtime_response={response_type or 'unknown'}: {response_preview or ''}".strip())
+    return "; ".join(parts)
+
+
 def _run_mode(runtime: LiteRTNodeRuntime, mode: str, prompt: str, image_path: Path | None) -> tuple[bool, Any, str | None]:
     if mode == "text":
         result = runtime.generate_text("Responde de forma breve.", prompt)
-        return result is not None, result, None if result is not None else "runtime returned no text"
+        return (
+            result is not None,
+            result,
+            None if result is not None else _runtime_detail(runtime, "runtime returned no text"),
+        )
 
     if mode == "reasoning":
         block = generate_alert_reasoning(
@@ -131,7 +153,10 @@ def _run_mode(runtime: LiteRTNodeRuntime, mode: str, prompt: str, image_path: Pa
             llm=runtime,
         )
         passed = block.model_name != "rule-fallback"
-        error = None if passed else "reasoning path fell back because LiteRT returned no usable text"
+        error = None if passed else _runtime_detail(
+            runtime,
+            "reasoning path fell back because LiteRT returned no usable text",
+        )
         return passed, block.__dict__, error
 
     if mode == "image":
@@ -142,7 +167,11 @@ def _run_mode(runtime: LiteRTNodeRuntime, mode: str, prompt: str, image_path: Pa
             prompt,
             [image_path],
         )
-        return result is not None, result, None if result is not None else "runtime returned no multimodal JSON"
+        return (
+            result is not None,
+            result,
+            None if result is not None else _runtime_detail(runtime, "runtime returned no multimodal JSON"),
+        )
 
     return False, None, f"unknown mode: {mode}"
 
@@ -153,6 +182,7 @@ def run_benchmark_modes(
     repeats: int = 2,
     prompt: str = 'Responde solo JSON valido: {"status":"ok","engine":"litert"}',
     image_path: Path | None = None,
+    fresh_runtime_per_run: bool = False,
 ) -> list[dict[str, Any]]:
     records: list[dict[str, Any]] = []
     for mode in modes:
@@ -162,31 +192,54 @@ def run_benchmark_modes(
             records.append(record)
             continue
 
-        runtime = LiteRTNodeRuntime()
-        health = runtime.health()
-        if not health.reachable:
-            record = _base_record(runtime=runtime, mode=mode, run_index=1, run_temperature="cold")
-            record["error_detail"] = f"LiteRT runtime is not ready: {health.detail}"
-            records.append(record)
-            continue
+        runtime = None if fresh_runtime_per_run else LiteRTNodeRuntime()
+        if runtime is not None:
+            health = runtime.health()
+            if not health.reachable:
+                record = _base_record(runtime=runtime, mode=mode, run_index=1, run_temperature="cold")
+                record["runtime_reuse_mode"] = "shared"
+                record["error_detail"] = f"LiteRT runtime is not ready: {health.detail}"
+                records.append(record)
+                continue
 
         for index in range(1, max(1, repeats) + 1):
-            run_temperature = "cold" if index == 1 else "warm"
+            run_runtime = LiteRTNodeRuntime() if fresh_runtime_per_run else runtime
+            if run_runtime is None:
+                raise RuntimeError("benchmark runtime was not initialized")
+            run_temperature = "cold" if index == 1 or fresh_runtime_per_run else "warm"
+            if fresh_runtime_per_run:
+                health = run_runtime.health()
+                if not health.reachable:
+                    record = _base_record(
+                        runtime=run_runtime,
+                        mode=mode,
+                        run_index=index,
+                        run_temperature=run_temperature,
+                    )
+                    record["runtime_reuse_mode"] = "fresh-per-run"
+                    record["error_detail"] = f"LiteRT runtime is not ready: {health.detail}"
+                    records.append(record)
+                    continue
             record = _base_record(
-                runtime=runtime,
+                runtime=run_runtime,
                 mode=mode,
                 run_index=index,
                 run_temperature=run_temperature,
             )
+            record["runtime_reuse_mode"] = "fresh-per-run" if fresh_runtime_per_run else "shared"
             started = time.monotonic()
             try:
-                passed, result, error = _run_mode(runtime, mode, prompt, image_path)
+                passed, result, error = _run_mode(run_runtime, mode, prompt, image_path)
             except Exception as exc:
                 passed, result, error = False, None, f"{type(exc).__name__}: {exc}"
             record["wall_clock_elapsed_seconds"] = round(time.monotonic() - started, 3)
             record["rss_peak_mb"] = _rss_mb()
             record["pass"] = passed
             record["error_detail"] = error
+            record["runtime_error_type"] = getattr(run_runtime, "last_error_type", None)
+            record["runtime_error_detail"] = getattr(run_runtime, "last_error_detail", None)
+            record["runtime_response_type"] = getattr(run_runtime, "last_response_type", None)
+            record["runtime_response_preview"] = getattr(run_runtime, "last_response_preview", None)
             record["output_preview"] = _preview(result)
             records.append(record)
     return records
@@ -218,6 +271,11 @@ def main() -> None:
     parser.add_argument("--model-path", type=Path, default=None, help="Override ACUIFERO_NODE_MODEL_PATH for this run.")
     parser.add_argument("--output", type=Path, default=None, help="Optional JSONL/JSON output file.")
     parser.add_argument("--json-array", action="store_true", help="Write one JSON array instead of JSONL.")
+    parser.add_argument(
+        "--fresh-runtime-per-run",
+        action="store_true",
+        help="Create a new LiteRTNodeRuntime for each repeat instead of reusing the engine.",
+    )
     args = parser.parse_args()
 
     if args.engine_tokens is not None:
@@ -228,7 +286,13 @@ def main() -> None:
         os.environ["ACUIFERO_NODE_MODEL_PATH"] = str(args.model_path)
 
     modes = ["text", "reasoning", "image"] if args.all else args.mode or ["text", "reasoning"]
-    records = run_benchmark_modes(modes, repeats=args.repeats, prompt=args.prompt, image_path=args.image)
+    records = run_benchmark_modes(
+        modes,
+        repeats=args.repeats,
+        prompt=args.prompt,
+        image_path=args.image,
+        fresh_runtime_per_run=args.fresh_runtime_per_run,
+    )
     _write_records(records, args.output, args.json_array)
 
 
