@@ -110,3 +110,6 @@ Measured on Raspberry Pi 5 8GB from:
 | gemma-4-E2B-it.litertlm | reasoning | gpu | cpu | cpu | true | warm | 20.025 | 3137.2 | n/a | n/a | n/a | fail: fallback after no usable text |
 | gemma-4-E2B-it.litertlm | image | gpu | cpu | cpu | true | cold | 28.316 | 2592.3 | n/a | n/a | n/a | pass |
 | gemma-4-E2B-it.litertlm | image | gpu | cpu | cpu | true | warm | 23.714 | 2604.3 | n/a | n/a | n/a | pass |
+
+For the E2B vs E4B ablation used to decide the Pi 5 8GB operating profile, see
+[`docs/hackathon/e2b-e4b-ablation.md`](./e2b-e4b-ablation.md).
