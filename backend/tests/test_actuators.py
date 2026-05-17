@@ -222,6 +222,26 @@ def test_dispatch_litert_path_ignores_unknown_tools():
     assert RECORDED_CALLS == [("notify_app", {"text": "alerta roja"})]
 
 
+def test_dispatch_litert_path_dedupes_duplicate_allowed_tool_calls():
+    runtime = _FakeLiteRTRuntime(
+        {
+            "tool_calls": [
+                {"name": "notify_app", "arguments": {"text": "alerta naranja"}},
+                {"name": "notify_app", "arguments": {"text": "alerta duplicada"}},
+            ]
+        }
+    )
+
+    fired = dispatch_actuators(
+        _make_alert(level="orange"),
+        runtime,
+        allowed_tools={"notify_app"},
+    )
+
+    assert fired == ["notify_app"]
+    assert RECORDED_CALLS == [("notify_app", {"text": "alerta naranja"})]
+
+
 def test_dispatch_litert_path_malformed_json_returns_empty():
     runtime = _FakeLiteRTRuntime(None)
 

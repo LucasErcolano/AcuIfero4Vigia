@@ -295,6 +295,7 @@ def dispatch_actuators(
             return []
 
         fired: list[str] = []
+        seen: set[str] = set()
         for call in tool_calls:
             if not isinstance(call, dict):
                 continue
@@ -312,8 +313,12 @@ def dispatch_actuators(
             if allowed_tools is not None and name not in allowed_tools:
                 _LOGGER.warning("LLM requested actuator outside recommended set: %s", name)
                 continue
+            if name in seen:
+                _LOGGER.info("LLM requested duplicate actuator in one response: %s", name)
+                continue
             try:
                 actuator.fire(arguments)
+                seen.add(name)
                 fired.append(name)
             except Exception as exc:
                 _LOGGER.warning("actuator %s raised during fire(): %s", name, exc)
