@@ -83,6 +83,20 @@ def test_deps_select_ollama_provider(monkeypatch: pytest.MonkeyPatch):
     assert assessor.force_embedded is False
 
 
+def test_deps_select_litert_decision_runtime(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("ACUIFERO_NODE_PROVIDER", "litert")
+    settings_module.get_settings.cache_clear()
+
+    assert deps_module.get_decision_runtime() is deps_module.acuifero_node_runtime
+
+
+def test_deps_select_ollama_decision_runtime(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("ACUIFERO_NODE_PROVIDER", "ollama")
+    settings_module.get_settings.cache_clear()
+
+    assert deps_module.get_decision_runtime() is deps_module.llm_client
+
+
 def test_invalid_acuifero_provider_fails_startup(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("ACUIFERO_NODE_PROVIDER", "bad-provider")
     settings_module.get_settings.cache_clear()

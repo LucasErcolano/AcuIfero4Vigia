@@ -15,7 +15,7 @@ sequenceDiagram
     participant ASR as asr_client (Whisper tiny)
     participant STR as GemmaFewShotTextStructurer
     participant FUSE as recompute_site_alert
-    participant ACT as dispatch_actuators (Gemma tool_calls)
+    participant ACT as dispatch_actuators (Gemma tool selection)
     participant BG as BackgroundTask image_assessor
 
     V->>UI: select site, record audio, attach photo, type optional transcript
@@ -38,7 +38,7 @@ sequenceDiagram
     API->>FUSE: recompute_site_alert(site, parsed)
     FUSE-->>API: FusedAlert(level, score, reasoning)
     alt level in {orange, red} and actuators enabled
-        API->>ACT: dispatch_actuators(alert, llm)
+        API->>ACT: dispatch_actuators(alert, runtime)
         ACT-->>API: tool_calls fired (trigger_alarm, notify_app, ...)
         API->>API: append "actuated: ..." to decision_trace
     end
@@ -78,7 +78,7 @@ The chip is informational; it does not gate submission or escalation.
 | `ACUIFERO_VIGIA_IMAGE_ENABLED` | inherits `ACUIFERO_MULTIMODAL_ENABLED` | Separate flag so volunteer-photo assessment can be enabled while node-side multimodal stays off (or vice versa). |
 | `ACUIFERO_IMAGE_MAX_TOKENS` | `256` | Output token cap for the multimodal image assessor. On CPU-only dev hardware ~75% of latency is vision-encoder prompt processing (768x768 patches); dropping output tokens helps but is not the bottleneck. Use together with `ACUIFERO_IMAGE_TIMEOUT_SECONDS`. |
 | `ACUIFERO_IMAGE_TIMEOUT_SECONDS` | `300` | HTTP timeout for `image_assessor.assess`. Decoupled from `ACUIFERO_LLM_TIMEOUT_SECONDS` so a slow multimodal call does not force the structuring/reasoning pipeline to wait that long. On CPU-only dev with `IMAGE_MAX_TOKENS=120` the assess completes in ~190–220 s, so 300 s gives margin. |
-| `ACUIFERO_ACTUATORS_ENABLED` | `true` | When `false`, `dispatch_actuators` is short-circuited and no tool calls are issued regardless of alert level. |
+| `ACUIFERO_ACTUATORS_ENABLED` | `true` | When `false`, `dispatch_actuators` is short-circuited and no tool calls are issued regardless of alert level. In production with `ACUIFERO_NODE_PROVIDER=litert`, actuator selection runs through `LiteRTNodeRuntime`; Ollama remains the explicit development provider when `ACUIFERO_NODE_PROVIDER=ollama`. |
 
 ## 5. Latency on CPU-only development hardware
 
@@ -99,7 +99,7 @@ Demo machines with GPU acceleration (the production target via MediaPipe on Andr
   SDK. Run `./gradlew :app:testDebugUnitTest` in an Android-capable checkout.
 - Real-device benchmarks for on-device Gemma latency are pending. The numbers in `docs/hackathon/android_gemma.md` are still projections.
 - iOS Safari `MediaRecorder` has well-known quirks; the PWA targets Chrome-class browsers for the hackathon demo. This belongs in the pitch script.
-- Tool-call dispatch is gated on Ollama Gemma 4 emitting valid `tool_calls`, verified in Phase 0 V1 of this branch. If a different model is wired in, the behaviour falls back to an empty actuator list — no actuators fired, no error raised.
+- Production actuator dispatch no longer depends on Ollama when `ACUIFERO_NODE_PROVIDER=litert`. The current LiteRT path uses strict JSON structured tool selection (`tool_calls`) through `LiteRTNodeRuntime`, not native LiteRT function calling. Unknown tools or malformed JSON fall back to an empty actuator list — no actuators fired, no error raised.
 - `frontend/src/pages/Calibration.tsx` has a pre-existing lint error (`react-hooks/immutability`: `draw` referenced before declaration). This bug is from commit `ce62b88` (P5 calibration UI, pre-Vigía branch). It is not introduced by this PR and is left for a separate fix so the diff stays focused on Vigía.
 
 ## 7. How to reproduce the demo flow
