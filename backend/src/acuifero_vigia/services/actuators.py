@@ -1,8 +1,9 @@
-"""Actuator dispatch via Gemma native tool-calling.
+"""Actuator dispatch via local Gemma tool selection.
 
-When a fused alert is escalated to orange/red, we ask the local Gemma model
-(through Ollama) which actuators to fire. Gemma 4 returns native ``tool_calls``
-in the chat response which we map onto concrete actuator implementations.
+When a fused alert is escalated to orange/red, we ask the configured local
+Gemma runtime which actuators to fire. LiteRT production uses strict JSON tool
+selection through ``LiteRTNodeRuntime``; Ollama remains supported as an explicit
+development provider through native ``tool_calls``.
 
 The default implementations are stdout-printing stubs that also append every
 fired call to ``RECORDED_CALLS`` so tests can assert behaviour without going
@@ -16,6 +17,7 @@ from typing import TYPE_CHECKING, Any, Protocol
 
 import httpx
 
+from acuifero_vigia.adapters.litert_node import LiteRTNodeRuntime
 from acuifero_vigia.core.settings import get_settings
 
 
@@ -191,25 +193,42 @@ def _ollama_chat_url(base_url: str) -> str:
     return base_url.rstrip("/").removesuffix("/v1") + "/api/chat"
 
 
-def dispatch_actuators(
+def _build_litert_prompts(alert: "FusedAlert") -> tuple[str, str]:
+    system = (
+        "You select actuator tool calls for an offline flood warning node. "
+        "Return only valid JSON, with no markdown and no prose. "
+        "Schema: {\"tool_calls\":[{\"name\":\"trigger_alarm|send_radio_payload|notify_app\","
+        "\"arguments\":{}}]}. "
+        "Use an empty tool_calls array unless the alert level is orange or red. "
+        "Only use the listed tool names. "
+        "Arguments: trigger_alarm needs reason; send_radio_payload needs severity and optional summary; "
+        "notify_app needs text."
+    )
+    user = (
+        f"Alert site_id={alert.site_id!r}, level={alert.level!r}, "
+        f"score={alert.score:.2f}, trigger_source={alert.trigger_source!r}.\n"
+        f"Summary: {alert.summary}\n"
+        "Select the minimal actuator calls now."
+    )
+    return system, user
+
+
+def _call_litert_tool_selection(alert: "FusedAlert", runtime: LiteRTNodeRuntime) -> dict[str, Any] | None:
+    system_prompt, user_prompt = _build_litert_prompts(alert)
+    try:
+        return runtime.generate_json(system_prompt, user_prompt, max_tokens=96)
+    except Exception as exc:
+        _LOGGER.warning("LiteRT actuator selection failed: %s", exc)
+        return None
+
+
+def _call_ollama_tool_selection(
     alert: "FusedAlert",
     llm: "OpenAICompatibleLLM",
-) -> list[str]:
-    """Ask Gemma which actuators to fire for ``alert`` and dispatch them.
-
-    Returns the list of tool names that were successfully fired. Any failure
-    (settings gate, transport error, malformed response, actuator missing in
-    registry) is swallowed and returns an empty list — actuator dispatch must
-    never break the decision pipeline.
-    """
-    settings = get_settings()
-    if not settings.actuators_enabled:
-        _LOGGER.info("actuators disabled by settings; skipping dispatch")
-        return []
-
+) -> dict[str, Any] | None:
     messages = _build_messages(alert)
     payload = {
-        "model": settings.llm_model,
+        "model": get_settings().llm_model,
         "stream": False,
         "think": False,
         "keep_alive": -1,
@@ -223,23 +242,64 @@ def dispatch_actuators(
         with httpx.Client(timeout=llm.settings.llm_timeout_seconds) as client:
             response = client.post(url, json=payload)
             response.raise_for_status()
-        body = response.json()
+        return response.json()
     except Exception as exc:
         _LOGGER.warning("actuator LLM call failed: %s", exc)
+        return None
+
+
+def _tool_calls_from_body(body: dict[str, Any] | None) -> list[Any]:
+    if not isinstance(body, dict):
+        return []
+    message = body.get("message")
+    if isinstance(message, dict):
+        tool_calls = message.get("tool_calls")
+    else:
+        tool_calls = body.get("tool_calls")
+    if not isinstance(tool_calls, list):
+        return []
+    return tool_calls
+
+
+def dispatch_actuators(
+    alert: "FusedAlert",
+    llm: "OpenAICompatibleLLM | LiteRTNodeRuntime",
+    *,
+    allowed_tools: set[str] | None = None,
+) -> list[str]:
+    """Ask Gemma which actuators to fire for ``alert`` and dispatch them.
+
+    Returns the list of tool names that were successfully fired. Any failure
+    (settings gate, transport error, malformed response, actuator missing in
+    registry) is swallowed and returns an empty list — actuator dispatch must
+    never break the decision pipeline.
+    """
+    settings = get_settings()
+    if not settings.actuators_enabled:
+        _LOGGER.info("actuators disabled by settings; skipping dispatch")
+        return []
+    if alert.level not in {"orange", "red"}:
+        _LOGGER.info("actuator dispatch guardrail skipped level=%s", alert.level)
         return []
 
+    body = (
+        _call_litert_tool_selection(alert, llm)
+        if isinstance(llm, LiteRTNodeRuntime)
+        else _call_ollama_tool_selection(alert, llm)
+    )
+
     try:
-        message = body.get("message") or {}
-        tool_calls = message.get("tool_calls") or []
-        if not isinstance(tool_calls, list) or not tool_calls:
+        tool_calls = _tool_calls_from_body(body)
+        if not tool_calls:
             _LOGGER.info("actuator LLM returned no tool_calls")
             return []
 
         fired: list[str] = []
+        seen: set[str] = set()
         for call in tool_calls:
             if not isinstance(call, dict):
                 continue
-            function = call.get("function") or {}
+            function = call.get("function") if isinstance(call.get("function"), dict) else call
             name = function.get("name")
             arguments = function.get("arguments") or {}
             if not isinstance(arguments, dict):
@@ -250,8 +310,15 @@ def dispatch_actuators(
             if actuator is None:
                 _LOGGER.warning("LLM requested unknown actuator: %s", name)
                 continue
+            if allowed_tools is not None and name not in allowed_tools:
+                _LOGGER.warning("LLM requested actuator outside recommended set: %s", name)
+                continue
+            if name in seen:
+                _LOGGER.info("LLM requested duplicate actuator in one response: %s", name)
+                continue
             try:
                 actuator.fire(arguments)
+                seen.add(name)
                 fired.append(name)
             except Exception as exc:
                 _LOGGER.warning("actuator %s raised during fire(): %s", name, exc)

@@ -12,6 +12,7 @@ from acuifero_vigia.core.settings import get_settings
 
 
 _LOGGER = logging.getLogger(__name__)
+_LITERT_SEND_MESSAGE_REUSE_ERROR = "litert_lm_conversation_send_message failed"
 
 
 @dataclass
@@ -31,6 +32,10 @@ class LiteRTNodeRuntime:
         self._lock = threading.RLock()
         self._module = None
         self._engines: dict[str, Any] = {}
+        self.last_error_type: str | None = None
+        self.last_error_detail: str | None = None
+        self.last_response_type: str | None = None
+        self.last_response_preview: str | None = None
 
     @property
     def model_name(self) -> str:
@@ -125,17 +130,31 @@ class LiteRTNodeRuntime:
 
     def _send_message(self, message: Any, *, multimodal: bool = False, max_tokens: int = 320) -> Any:
         _ = max_tokens
+        self.last_error_type = None
+        self.last_error_detail = None
+        self.last_response_type = None
+        self.last_response_preview = None
         if self.settings.acuifero_node_provider != "litert":
             return None
 
         try:
             with self._lock:
-                engine = self._ensure_engine(multimodal=multimodal)
-                if engine is None:
-                    return None
-                with engine.create_conversation() as conversation:
-                    return conversation.send_message(message)
+                return self._send_message_locked(message, multimodal=multimodal)
         except Exception as exc:
+            self.last_error_type = type(exc).__name__
+            self.last_error_detail = str(exc)
+            if self._is_engine_reuse_error(exc):
+                self._discard_engine(multimodal=multimodal)
+                try:
+                    with self._lock:
+                        response = self._send_message_locked(message, multimodal=multimodal)
+                    self.last_error_type = None
+                    self.last_error_detail = None
+                    return response
+                except Exception as retry_exc:
+                    self.last_error_type = type(retry_exc).__name__
+                    self.last_error_detail = str(retry_exc)
+                    exc = retry_exc
             _LOGGER.warning(
                 "LiteRT node message failed mode=%s backend=%s model=%s error=%s",
                 "multimodal" if multimodal else "text",
@@ -144,6 +163,24 @@ class LiteRTNodeRuntime:
                 exc,
             )
             return None
+
+    def _send_message_locked(self, message: Any, *, multimodal: bool = False) -> Any:
+        engine = self._ensure_engine(multimodal=multimodal)
+        if engine is None:
+            return None
+        with engine.create_conversation() as conversation:
+            response = conversation.send_message(message)
+            self.last_response_type = type(response).__name__
+            self.last_response_preview = str(response)[:500] if response is not None else None
+            return response
+
+    def _discard_engine(self, *, multimodal: bool = False) -> None:
+        engine_key = "multimodal" if multimodal else "text"
+        self._engines.pop(engine_key, None)
+
+    @staticmethod
+    def _is_engine_reuse_error(exc: Exception) -> bool:
+        return _LITERT_SEND_MESSAGE_REUSE_ERROR in str(exc)
 
     def _ensure_engine(self, *, multimodal: bool = False) -> Any:
         engine_key = "multimodal" if multimodal else "text"

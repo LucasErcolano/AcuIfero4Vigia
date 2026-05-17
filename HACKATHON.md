@@ -42,6 +42,13 @@ Proof: [`docs/hackathon/rioplatense_eval.md`](docs/hackathon/rioplatense_eval.md
 `scripts/demo_connectivity.py` runs: online report -> offline -> queued report
 -> local node analysis -> **audible siren** -> online -> queue drains.
 
+Actuator continuity note: in LiteRT production mode, the backend no longer calls
+Ollama for actuator selection. It asks LiteRT for strict JSON tool selection and
+falls back to deterministic recommended actuators for orange/red alerts if model
+selection returns no valid tools or times out.
+
+Proof: [`docs/hackathon/vigia.md`](docs/hackathon/vigia.md).
+
 ### 6. SINAGIR compatibility
 
 `POST /api/alerts/{id}/export-sinagir` returns a schema-tagged, documented
@@ -88,3 +95,15 @@ python3 scripts/demo_connectivity.py
 cd backend && PYTHONPATH=src pytest -q
 cd frontend && npm test && npm run build
 ```
+
+## LiteRT benchmark evidence and asterisks
+
+- Pi 5 8 GB E2B measurements, including wall-clock/RSS and unmeasured
+  TTFT/decode tok/s rationale: [`docs/hackathon/benchmark-card.md`](docs/hackathon/benchmark-card.md).
+- E2B vs E4B ablation: [`docs/hackathon/e2b-e4b-ablation.md`](docs/hackathon/e2b-e4b-ablation.md).
+  E2B remains the Pi 5 8 GB operating profile. E4B GPU text/reasoning failed on
+  this hardware with WebGPU buffer/command errors; E4B CPU and multimodal CPU/CPU
+  are recorded as fallback/candidate measurements, not the main Pi profile.
+- LiteRT GPU text-engine reuse is mitigated by one engine-reset retry. The
+  mitigation preserves backend continuity, but retry calls can be slower and use
+  more RSS because the engine is recreated.

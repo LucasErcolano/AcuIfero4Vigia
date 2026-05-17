@@ -50,6 +50,13 @@ acuifero_engine = AcuiferoAssessmentEngine(
 is_online = True
 
 
+def get_decision_runtime() -> OpenAICompatibleLLM | LiteRTNodeRuntime:
+    settings = get_settings()
+    if settings.acuifero_node_provider == "litert":
+        return acuifero_node_runtime
+    return llm_client
+
+
 def enqueue_entity(session: Session, entity_type: str, entity: SQLModel) -> None:
     entity_id = getattr(entity, "id", None)
     if entity_id is None:

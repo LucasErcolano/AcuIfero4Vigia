@@ -9,8 +9,8 @@ from sqlmodel import Session, select
 from acuifero_vigia.api.deps import (
     asr_client,
     enqueue_entity,
+    get_decision_runtime,
     image_assessor,
-    llm_client,
     text_structurer,
 )
 from acuifero_vigia.db.database import get_session, session_scope
@@ -85,7 +85,7 @@ async def create_report(
     session.flush()
     enqueue_entity(session, "parsed_observation", parsed)
 
-    alert = recompute_site_alert(session, site_id, llm_client)
+    alert = recompute_site_alert(session, site_id, get_decision_runtime())
     session.flush()
     enqueue_entity(session, "fused_alert", alert)
     if alert.incident_id is not None:

@@ -99,7 +99,16 @@ new incident for every alert. Incidents move through `monitoring`, `active`,
 Actuation is separated from the decision. The engine recommends siren, radio,
 and app actions for orange/red alerts, records every attempt in
 `ActuationRecord`, and uses incident-level idempotency so repeated recomputes do
-not refire the same critical action.
+not refire the same critical action. In production LiteRT mode,
+`dispatch_actuators` asks `LiteRTNodeRuntime` for strict JSON `tool_calls`
+selection and never contacts Ollama. This is structured tool selection, not a
+native LiteRT function-calling API exposed by the current wrapper. If selection
+returns no valid tools or omits some recommended tools, orange/red alerts use
+deterministic fallback to fire the missing recommended actuators. The operational
+path therefore does not depend on a complete model tool-selection response, and
+tools already selected by LiteRT are not refired. Model-selected tools are
+constrained to the deterministic recommended pending actuators for the alert
+level.
 
 Operator endpoints:
 
@@ -154,6 +163,14 @@ switching to Ollama.
 `/api/settings/runtime` exposes `p1_runtime_ready` as a runtime readiness flag
 for this LiteRT configuration. Jury-facing evidence must come from an actual
 analysis response, specifically `runner.mode=litert-multimodal-temporal`.
+
+Measured Pi 5 8 GB benchmark evidence lives in
+`docs/hackathon/benchmark-card.md` and `docs/hackathon/e2b-e4b-ablation.md`.
+Known constraints are part of the runtime contract: TTFT and decode tok/s are
+not estimated because this wrapper exposes only final responses; E2B is the Pi 5
+8 GB operating model; E4B GPU text/reasoning fails on this hardware with WebGPU
+buffer/command errors; and the GPU text-engine reuse issue is mitigated with a
+single engine-reset retry that can raise latency/RSS on the retry path.
 
 On Raspberry Pi 8 GB, Acuifero is multimodal-first but sparse: ffmpeg extracts
 one optimized frame and Gemma 4 performs the visual interpretation. OpenCV is not

@@ -296,6 +296,161 @@ def test_litert_runtime_returns_none_when_dependency_is_missing(monkeypatch, tmp
     assert runtime.generate_text("system prompt", "user prompt") is None
 
 
+def test_litert_runtime_exposes_last_send_error(monkeypatch, tmp_path: Path):
+    model_path = tmp_path / "gemma-4-E2B-it.litertlm"
+    model_path.write_bytes(b"fake-model")
+
+    monkeypatch.setenv("ACUIFERO_NODE_PROVIDER", "litert")
+    monkeypatch.setenv("ACUIFERO_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("ACUIFERO_NODE_MODEL_PATH", str(model_path))
+
+    from acuifero_vigia.adapters.litert_node import LiteRTNodeRuntime
+
+    class FakeConversation:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def send_message(self, _message):
+            raise RuntimeError("litert_lm_conversation_send_message failed")
+
+    class FakeEngine:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def create_conversation(self):
+            return FakeConversation()
+
+    fake_module = SimpleNamespace(
+        Engine=FakeEngine,
+        Backend=SimpleNamespace(CPU="cpu", GPU="gpu"),
+    )
+
+    runtime = LiteRTNodeRuntime()
+    monkeypatch.setattr(runtime, "_import_litert_module", lambda: fake_module)
+
+    assert runtime.generate_text("system prompt", "user prompt") is None
+    assert runtime.last_error_type == "RuntimeError"
+    assert runtime.last_error_detail == "litert_lm_conversation_send_message failed"
+
+
+def test_litert_runtime_resets_engine_and_retries_reuse_failure(monkeypatch, tmp_path: Path):
+    model_path = tmp_path / "gemma-4-E2B-it.litertlm"
+    model_path.write_bytes(b"fake-model")
+
+    monkeypatch.setenv("ACUIFERO_NODE_PROVIDER", "litert")
+    monkeypatch.setenv("ACUIFERO_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("ACUIFERO_NODE_MODEL_PATH", str(model_path))
+
+    from acuifero_vigia.adapters.litert_node import LiteRTNodeRuntime
+
+    calls: list[str] = []
+
+    class FakeConversation:
+        def __init__(self, label: str):
+            self.label = label
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def send_message(self, _message):
+            calls.append(self.label)
+            if self.label == "engine-1":
+                raise RuntimeError("litert_lm_conversation_send_message failed")
+            return {"content": [{"text": "retry ok"}]}
+
+    class FakeEngine:
+        counter = 0
+
+        def __init__(self, *_args, **_kwargs):
+            type(self).counter += 1
+            self.label = f"engine-{type(self).counter}"
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def create_conversation(self):
+            return FakeConversation(self.label)
+
+    fake_module = SimpleNamespace(
+        Engine=FakeEngine,
+        Backend=SimpleNamespace(CPU="cpu", GPU="gpu"),
+    )
+
+    runtime = LiteRTNodeRuntime()
+    monkeypatch.setattr(runtime, "_import_litert_module", lambda: fake_module)
+
+    assert runtime.generate_text("system prompt", "user prompt") == "retry ok"
+    assert calls == ["engine-1", "engine-2"]
+    assert FakeEngine.counter == 2
+    assert runtime.last_error_type is None
+    assert runtime.last_error_detail is None
+    assert runtime.last_response_type == "dict"
+
+
+def test_litert_runtime_returns_none_when_reuse_retry_fails(monkeypatch, tmp_path: Path):
+    model_path = tmp_path / "gemma-4-E2B-it.litertlm"
+    model_path.write_bytes(b"fake-model")
+
+    monkeypatch.setenv("ACUIFERO_NODE_PROVIDER", "litert")
+    monkeypatch.setenv("ACUIFERO_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("ACUIFERO_NODE_MODEL_PATH", str(model_path))
+
+    from acuifero_vigia.adapters.litert_node import LiteRTNodeRuntime
+
+    class FakeConversation:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def send_message(self, _message):
+            raise RuntimeError("litert_lm_conversation_send_message failed")
+
+    class FakeEngine:
+        counter = 0
+
+        def __init__(self, *_args, **_kwargs):
+            type(self).counter += 1
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def create_conversation(self):
+            return FakeConversation()
+
+    fake_module = SimpleNamespace(
+        Engine=FakeEngine,
+        Backend=SimpleNamespace(CPU="cpu", GPU="gpu"),
+    )
+
+    runtime = LiteRTNodeRuntime()
+    monkeypatch.setattr(runtime, "_import_litert_module", lambda: fake_module)
+
+    assert runtime.generate_text("system prompt", "user prompt") is None
+    assert FakeEngine.counter == 2
+    assert runtime.last_error_type == "RuntimeError"
+    assert runtime.last_error_detail == "litert_lm_conversation_send_message failed"
+
+
 def test_litert_runner_parses_json_payload(monkeypatch, tmp_path: Path):
     from datetime import datetime
 

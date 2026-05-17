@@ -8,7 +8,7 @@ from acuifero_vigia.adapters.text_structuring_gemma_fewshot import (
     _build_user_prompt,
     FEW_SHOT,
 )
-from acuifero_vigia.services.report_structuring import _fallback_parse, _normalize_llm_payload
+from acuifero_vigia.services.report_structuring import _normalize_llm_payload
 
 
 CORPUS = Path(__file__).resolve().parents[2] / "datasets" / "rioplatense_hydro" / "corpus.jsonl"
