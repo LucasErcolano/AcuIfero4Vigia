@@ -145,7 +145,7 @@ class MainViewModel(
                     if (parsed == null) {
                         _siteState.value = _siteState.value.copy(
                             isSubmitting = false,
-                            error = "Gemma local no disponible — usá conexión a servidor.",
+                            error = "Local Gemma unavailable — use server connection.",
                         )
                     } else {
                         val envelope = ReportEnvelope(
@@ -171,13 +171,13 @@ class MainViewModel(
                         _siteState.value = _siteState.value.copy(
                             isSubmitting = false,
                             reportResult = envelope,
-                            message = "Reporte estructurado localmente con Gemma.",
+                            message = "Report structured locally with Gemma.",
                         )
                     }
                 }.onFailure { error ->
                     _siteState.value = _siteState.value.copy(
                         isSubmitting = false,
-                        error = "Gemma local no disponible — usá conexión a servidor.",
+                        error = "Local Gemma unavailable — use server connection.",
                     )
                 }
                 return@launch
@@ -188,7 +188,7 @@ class MainViewModel(
                 _siteState.value = _siteState.value.copy(
                     isSubmitting = false,
                     reportResult = envelope,
-                    message = if (envelope == null) "Reporte guardado offline." else "Reporte enviado al backend.",
+                    message = if (envelope == null) "Report saved offline." else "Report sent to backend.",
                 )
                 refreshDashboard()
             }.onFailure { error ->
@@ -205,7 +205,7 @@ class MainViewModel(
                     _siteState.value = _siteState.value.copy(
                         calibration = calibration,
                         isSubmitting = false,
-                        message = "Calibracion guardada.",
+                        message = "Calibration saved.",
                     )
                     onDone()
                 }
@@ -218,7 +218,7 @@ class MainViewModel(
             _dashboard.value = _dashboard.value.copy(isLoading = true, error = null)
             runCatching { repository.flushPendingReports() }
                 .onSuccess {
-                    _siteState.value = _siteState.value.copy(message = "Cola sincronizada.")
+                    _siteState.value = _siteState.value.copy(message = "Queue synced.")
                     refreshDashboard()
                 }
                 .onFailure { error ->

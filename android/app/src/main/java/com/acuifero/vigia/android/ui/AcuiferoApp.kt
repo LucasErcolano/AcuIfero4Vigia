@@ -188,18 +188,18 @@ private fun DashboardScreen(
         item {
             Text("Acuifero Vigia Android", style = MaterialTheme.typography.headlineMedium, color = Emerald, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(6.dp))
-            Text("MVP Android conectado al backend real, con queue offline y operaciones sobre el clip fijo demo.")
+            Text("Android MVP connected to real backend, with offline queue and operations on the fixed demo clip.")
         }
         item {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 StatusCard(
                     title = "LLM",
-                    body = state.runtime?.llm?.let { "${it.model} | reachable=${it.reachable}" } ?: "Sin datos",
+                    body = state.runtime?.llm?.let { "${it.model} | reachable=${it.reachable}" } ?: "No data",
                     modifier = Modifier.fillMaxWidth(),
                 )
                 StatusCard(
                     title = "Queue",
-                    body = "$queueCount pendientes",
+                    body = "$queueCount pending",
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
@@ -208,11 +208,11 @@ private fun DashboardScreen(
             Button(onClick = onRefresh) { Text(if (state.isLoading) "Refreshing..." else "Refresh dashboard") }
         }
         item {
-            Text("Alertas", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+            Text("Alerts", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
         }
         items(state.alerts) { alert -> AlertCard(alert) }
         item {
-            Text("Sitios", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+            Text("Sites", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
         }
         items(state.sites) { site ->
             Card(modifier = Modifier.fillMaxWidth().clickable { onOpenSite(site.id) }) {
@@ -271,7 +271,7 @@ private fun ReasoningPanel(alert: AlertSummary) {
     Column {
         TextButton(onClick = { expanded = !expanded }, contentPadding = PaddingValues(0.dp)) {
             Text(
-                if (expanded) "Ocultar razonamiento de Gemma" else "Razonamiento de Gemma (${alert.reasoningModel ?: "local"})",
+                if (expanded) "Hide Gemma reasoning" else "Gemma reasoning (${alert.reasoningModel ?: "local"})",
                 style = MaterialTheme.typography.bodySmall,
                 fontWeight = FontWeight.SemiBold,
             )
@@ -300,9 +300,9 @@ private fun SiteDetailScreen(
     onSubmitReport: (String, String, String, Boolean) -> Unit,
     onCalibrate: () -> Unit,
 ) {
-    var reporterName by rememberSaveable { mutableStateOf("Operador Android") }
-    var reporterRole by rememberSaveable { mutableStateOf("brigadista") }
-    var transcriptText by rememberSaveable { mutableStateOf("El agua ya cruzo la marca critica y trae barro, evacuar zona baja.") }
+    var reporterName by rememberSaveable { mutableStateOf("Android Operator") }
+    var reporterRole by rememberSaveable { mutableStateOf("brigade member") }
+    var transcriptText by rememberSaveable { mutableStateOf("Water has already crossed the critical mark and brings mud, evacuate low zone.") }
     var saveOffline by rememberSaveable { mutableStateOf(false) }
 
     Column(
@@ -366,10 +366,10 @@ private fun SiteDetailScreen(
                 }
                 state.reportResult?.let { result ->
                     val parserLabel = when (result.parsed.parserSource) {
-                        "gemma-android" -> "Analizado con Gemma en este dispositivo"
-                        "llm" -> "Analizado por Gemma en el servidor"
-                        "rules" -> "Estructurado por reglas locales"
-                        else -> "Origen: ${result.parsed.parserSource}"
+                        "gemma-android" -> "Analyzed with Gemma on this device"
+                        "llm" -> "Analyzed by Gemma on the server"
+                        "rules" -> "Structured by local rules"
+                        else -> "Source: ${result.parsed.parserSource}"
                     }
                     AssistChip(onClick = {}, label = { Text(parserLabel) })
                     Text("parser=${result.parsed.parserSource} | urgency=${result.parsed.urgency} | water=${result.parsed.waterLevelCategory}")
@@ -473,7 +473,7 @@ private fun SettingsScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text("Settings", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-        Text("Por defecto el emulador usa 10.0.2.2 para llegar al backend FastAPI local.")
+        Text("By default the emulator uses 10.0.2.2 to reach the local FastAPI backend.")
         OutlinedTextField(value = editableUrl, onValueChange = { editableUrl = it }, label = { Text("API base URL") }, modifier = Modifier.fillMaxWidth())
         Button(onClick = { onSaveServerUrl(editableUrl) }) { Text("Save URL") }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
