@@ -83,7 +83,6 @@ def get_settings() -> Settings:
         "raspberry-pi-16gb-multimodal-prod",
         "rpi16gb",
     }
-    is_raspberry_profile = is_pi8_demo_profile or is_pi16_prod_profile
     upload_dir = Path(os.environ.get("ACUIFERO_UPLOAD_DIR", str(data_dir / "uploads")))
 
     edge_db_path = Path(os.environ.get("ACUIFERO_EDGE_DB_PATH", str(data_dir / "edge.db")))

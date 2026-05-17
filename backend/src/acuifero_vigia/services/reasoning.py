@@ -12,9 +12,6 @@ import json
 from dataclasses import dataclass, field
 from typing import Any, Optional, Protocol
 
-from acuifero_vigia.adapters.llm import OpenAICompatibleLLM
-
-
 class TextGenerator(Protocol):
     def generate_text(self, system_prompt: str, user_prompt: str, max_tokens: int = 320) -> str | None: ...
 

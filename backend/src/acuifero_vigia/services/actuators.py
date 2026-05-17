@@ -264,6 +264,8 @@ def _tool_calls_from_body(body: dict[str, Any] | None) -> list[Any]:
 def dispatch_actuators(
     alert: "FusedAlert",
     llm: "OpenAICompatibleLLM | LiteRTNodeRuntime",
+    *,
+    allowed_tools: set[str] | None = None,
 ) -> list[str]:
     """Ask Gemma which actuators to fire for ``alert`` and dispatch them.
 
@@ -306,6 +308,9 @@ def dispatch_actuators(
             actuator = ACTUATOR_REGISTRY.get(name)
             if actuator is None:
                 _LOGGER.warning("LLM requested unknown actuator: %s", name)
+                continue
+            if allowed_tools is not None and name not in allowed_tools:
+                _LOGGER.warning("LLM requested actuator outside recommended set: %s", name)
                 continue
             try:
                 actuator.fire(arguments)

@@ -211,6 +211,70 @@ def test_malformed_litert_actuator_selection_uses_deterministic_fallback():
     ]
 
 
+def test_partial_litert_actuator_selection_completes_recommended_fallback():
+    class PartialLiteRTRuntime(LiteRTNodeRuntime):
+        @property
+        def model_name(self) -> str:
+            return "fake-litert"
+
+        def generate_text(self, *_args, **_kwargs):
+            return "Resumen: alerta roja por nodo. Cadena: nodo -> regla -> actuar"
+
+        def generate_json(self, *_args, **_kwargs):
+            return {"tool_calls": [{"name": "notify_app", "arguments": {"text": "alerta roja"}}]}
+
+    now = datetime(2026, 5, 14, 12, 0, 0)
+    with Session(edge_engine) as session:
+        session.add(_node("site-a", now - timedelta(minutes=2), 0.9, crossed=True))
+        alert = recompute_site_alert(session, "site-a", PartialLiteRTRuntime(), now=now)
+        level = alert.level
+        records = session.exec(select(ActuationRecord)).all()
+        record_types = [record.actuator_type for record in records]
+        record_statuses = [record.status for record in records]
+        session.commit()
+
+    fired_names = [name for name, _payload in RECORDED_CALLS]
+    assert level == "red"
+    assert record_types == ["trigger_alarm", "send_radio_payload", "notify_app"]
+    assert record_statuses == ["success", "success", "success"]
+    assert set(fired_names) == {"trigger_alarm", "send_radio_payload", "notify_app"}
+    assert fired_names.count("notify_app") == 1
+
+
+def test_orange_litert_selection_is_constrained_to_recommended_pending_actuators():
+    class OverreachingLiteRTRuntime(LiteRTNodeRuntime):
+        @property
+        def model_name(self) -> str:
+            return "fake-litert"
+
+        def generate_text(self, *_args, **_kwargs):
+            return "Resumen: alerta naranja por dos fuentes. Cadena: corroborar -> preparar"
+
+        def generate_json(self, *_args, **_kwargs):
+            return {
+                "tool_calls": [
+                    {"name": "trigger_alarm", "arguments": {"reason": "modelo pidio sirena"}},
+                    {"name": "notify_app", "arguments": {"text": "alerta naranja"}},
+                ]
+            }
+
+    now = datetime(2026, 5, 14, 12, 0, 0)
+    with Session(edge_engine) as session:
+        session.add(_node("site-a", now - timedelta(minutes=2), 0.72, crossed=False))
+        alert = recompute_site_alert(session, "site-a", OverreachingLiteRTRuntime(), now=now)
+        level = alert.level
+        records = session.exec(select(ActuationRecord)).all()
+        record_types = [record.actuator_type for record in records]
+        record_statuses = [record.status for record in records]
+        session.commit()
+
+    fired_names = [name for name, _payload in RECORDED_CALLS]
+    assert level == "orange"
+    assert record_types == ["send_radio_payload", "notify_app"]
+    assert record_statuses == ["success", "success"]
+    assert fired_names == ["notify_app", "send_radio_payload"]
+
+
 @pytest.mark.anyio
 async def test_central_integration_flow_and_idempotent_sync():
     now = datetime(2026, 5, 14, 12, 0, 0)

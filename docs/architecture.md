@@ -103,9 +103,12 @@ not refire the same critical action. In production LiteRT mode,
 `dispatch_actuators` asks `LiteRTNodeRuntime` for strict JSON `tool_calls`
 selection and never contacts Ollama. This is structured tool selection, not a
 native LiteRT function-calling API exposed by the current wrapper. If selection
-returns no valid tools, orange/red alerts can still use the deterministic
-recommended-actuator fallback so the operational path does not depend on a model
-tool-selection response.
+returns no valid tools or omits some recommended tools, orange/red alerts use
+deterministic fallback to fire the missing recommended actuators. The operational
+path therefore does not depend on a complete model tool-selection response, and
+tools already selected by LiteRT are not refired. Model-selected tools are
+constrained to the deterministic recommended pending actuators for the alert
+level.
 
 Operator endpoints:
 

@@ -406,10 +406,13 @@ def _record_actuators(
     if not pending:
         return []
 
-    fired = dispatch_actuators(alert, llm) if llm is not None else []
-    deterministic_fallback = not fired
-    if deterministic_fallback:
-        fired = pending
+    dispatched = (
+        dispatch_actuators(alert, llm, allowed_tools=set(pending))
+        if llm is not None
+        else []
+    )
+    dispatched_pending = {name for name in dispatched if name in pending}
+    fallback_pending = [name for name in pending if name not in dispatched_pending]
 
     records: list[str] = []
     for name in pending:
@@ -425,10 +428,10 @@ def _record_actuators(
             site_id=alert.site_id,
             actuator_type=name,
             payload=json.dumps(payload, ensure_ascii=True),
-            status="success" if name in fired else "skipped",
-            error=None if name in fired else "not_returned_by_dispatcher",
+            status="success",
+            error=None,
         )
-        if name in fired and deterministic_fallback:
+        if name in fallback_pending:
             actuator = ACTUATOR_REGISTRY.get(name)
             if actuator is not None:
                 try:

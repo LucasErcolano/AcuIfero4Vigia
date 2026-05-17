@@ -37,10 +37,15 @@ backend/.venv/bin/python scripts/litert_benchmark.py \
 # Pi 5 GPU runtime, because shared text-engine warm calls are unstable.
 backend/.venv/bin/python scripts/litert_benchmark.py \
   --mode text \
+  --repeats 2 \
+  --fresh-runtime-per-run \
+  --output docs/hackathon/litert-e2b-pi5-8gb-text-fresh-runtime.jsonl
+
+backend/.venv/bin/python scripts/litert_benchmark.py \
   --mode reasoning \
   --repeats 2 \
   --fresh-runtime-per-run \
-  --output docs/hackathon/litert-e2b-pi5-8gb-fresh-runtime.jsonl
+  --output docs/hackathon/litert-e2b-pi5-8gb-reasoning-fresh-runtime.jsonl
 ```
 
 If a frame asset is present, add multimodal:
