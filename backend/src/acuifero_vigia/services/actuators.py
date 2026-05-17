@@ -194,24 +194,17 @@ def _ollama_chat_url(base_url: str) -> str:
 
 
 def _build_litert_prompts(alert: "FusedAlert") -> tuple[str, str]:
-    tools = [
-        {
-            "name": schema["function"]["name"],
-            "parameters": schema["function"]["parameters"],
-            "description": schema["function"]["description"],
-        }
-        for schema in ACTUATOR_TOOL_SCHEMA
-    ]
     system = (
         "You select actuator tool calls for an offline flood warning node. "
         "Return only valid JSON, with no markdown and no prose. "
         "Schema: {\"tool_calls\":[{\"name\":\"trigger_alarm|send_radio_payload|notify_app\","
         "\"arguments\":{}}]}. "
         "Use an empty tool_calls array unless the alert level is orange or red. "
-        "Only use the listed tool names."
+        "Only use the listed tool names. "
+        "Arguments: trigger_alarm needs reason; send_radio_payload needs severity and optional summary; "
+        "notify_app needs text."
     )
     user = (
-        f"Available tools: {tools!r}\n"
         f"Alert site_id={alert.site_id!r}, level={alert.level!r}, "
         f"score={alert.score:.2f}, trigger_source={alert.trigger_source!r}.\n"
         f"Summary: {alert.summary}\n"
@@ -223,7 +216,7 @@ def _build_litert_prompts(alert: "FusedAlert") -> tuple[str, str]:
 def _call_litert_tool_selection(alert: "FusedAlert", runtime: LiteRTNodeRuntime) -> dict[str, Any] | None:
     system_prompt, user_prompt = _build_litert_prompts(alert)
     try:
-        return runtime.generate_json(system_prompt, user_prompt, max_tokens=240)
+        return runtime.generate_json(system_prompt, user_prompt, max_tokens=96)
     except Exception as exc:
         _LOGGER.warning("LiteRT actuator selection failed: %s", exc)
         return None

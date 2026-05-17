@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 import pytest
 from sqlmodel import Session, SQLModel, select
 
+from acuifero_vigia.adapters.litert_node import LiteRTNodeRuntime
 from acuifero_vigia.api.deps import enqueue_entity
 from acuifero_vigia.api.routers.sync import flush_sync
 from acuifero_vigia.core import settings as settings_module
@@ -166,6 +167,48 @@ def test_incident_reused_and_actuators_idempotent():
     assert incident_count == 1
     assert len([status for status in record_statuses if status == "success"]) == 3
     assert [name for name, _payload in RECORDED_CALLS] == ["trigger_alarm", "send_radio_payload", "notify_app"]
+
+
+def test_malformed_litert_actuator_selection_uses_deterministic_fallback():
+    class MalformedLiteRTRuntime(LiteRTNodeRuntime):
+        def __init__(self):
+            self.json_calls = 0
+
+        @property
+        def model_name(self) -> str:
+            return "fake-litert"
+
+        def generate_text(self, *_args, **_kwargs):
+            return "Resumen: alerta roja por nodo. Cadena: nodo -> regla -> actuar"
+
+        def generate_json(self, *_args, **_kwargs):
+            self.json_calls += 1
+            return None
+
+    now = datetime(2026, 5, 14, 12, 0, 0)
+    runtime = MalformedLiteRTRuntime()
+    with Session(edge_engine) as session:
+        session.add(_node("site-a", now - timedelta(minutes=2), 0.9, crossed=True))
+        alert = recompute_site_alert(session, "site-a", runtime, now=now)
+        level = alert.level
+        records = session.exec(select(ActuationRecord)).all()
+        record_types = [record.actuator_type for record in records]
+        record_statuses = {record.status for record in records}
+        session.commit()
+
+    assert level == "red"
+    assert runtime.json_calls == 1
+    assert record_types == [
+        "trigger_alarm",
+        "send_radio_payload",
+        "notify_app",
+    ]
+    assert record_statuses == {"success"}
+    assert [name for name, _payload in RECORDED_CALLS] == [
+        "trigger_alarm",
+        "send_radio_payload",
+        "notify_app",
+    ]
 
 
 @pytest.mark.anyio

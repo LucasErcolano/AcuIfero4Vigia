@@ -3,11 +3,10 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Any, Optional
+from typing import Any, Protocol
 
 from sqlmodel import Session, select
 
-from acuifero_vigia.adapters.llm import OpenAICompatibleLLM
 from acuifero_vigia.models.domain import (
     ActuationRecord,
     FusedAlert,
@@ -23,6 +22,11 @@ from acuifero_vigia.services.reasoning import generate_alert_reasoning, serializ
 
 DEFAULT_EVIDENCE_WINDOW_MINUTES = 45
 STALE_DECAY_FLOOR = 0.45
+
+
+class DecisionRuntime(Protocol):
+    def generate_text(self, system_prompt: str, user_prompt: str, max_tokens: int = 320) -> str | None: ...
+
 
 LEVEL_MEANINGS = {
     "green": "Sin evidencia reciente de riesgo operativo.",
@@ -383,7 +387,7 @@ def _record_actuators(
     session: Session,
     alert: FusedAlert,
     incident: Incident | None,
-    llm: Optional[OpenAICompatibleLLM],
+    llm: DecisionRuntime | None,
 ) -> list[str]:
     if alert.level not in {"orange", "red"}:
         return []
@@ -440,7 +444,7 @@ def _record_actuators(
 def recompute_site_alert(
     session: Session,
     site_id: str,
-    llm: Optional[OpenAICompatibleLLM] = None,
+    llm: DecisionRuntime | None = None,
     *,
     window_minutes: int = DEFAULT_EVIDENCE_WINDOW_MINUTES,
     now: datetime | None = None,
