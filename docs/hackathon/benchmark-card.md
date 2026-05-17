@@ -1,0 +1,99 @@
+# LiteRT-LM Benchmark Card
+
+Quantitative card for the LiteRT Prize path. The current target is the real
+Raspberry Pi 5 8GB Acuifero node running Gemma 4 E2B through LiteRT-LM, with
+text/reasoning on GPU and multimodal image mode on CPU/CPU to avoid the Pi 8GB
+buffer overflow seen with GPU multimodal.
+
+## Run on the Pi
+
+From the repo checkout on the Raspberry Pi. The measured run below used the
+LiteRT worktree at `/home/joaco/AcuIfero4Vigia-litert` and the backend virtual
+environment at `backend/.venv/bin/python`.
+
+```bash
+cd /home/joaco/AcuIfero4Vigia-litert
+export ACUIFERO_NODE_PROVIDER=litert
+export ACUIFERO_NODE_MODEL_PATH=backend/data/models/gemma-4-E2B-it.litertlm
+export ACUIFERO_NODE_BACKEND=gpu
+export ACUIFERO_NODE_MULTIMODAL_BACKEND=cpu
+export ACUIFERO_NODE_MULTIMODAL_VISION_BACKEND=cpu
+export ACUIFERO_NODE_ENABLE_SPECULATIVE_DECODING=true
+export PYTHONPATH=backend/src
+
+backend/.venv/bin/python scripts/litert_smoke.py --reasoning
+
+backend/.venv/bin/python scripts/litert_benchmark.py \
+  --mode text \
+  --repeats 2 \
+  --output docs/hackathon/litert-e2b-pi5-8gb-text.jsonl
+
+backend/.venv/bin/python scripts/litert_benchmark.py \
+  --mode reasoning \
+  --repeats 2 \
+  --output docs/hackathon/litert-e2b-pi5-8gb-reasoning.jsonl
+```
+
+If a frame asset is present, add multimodal:
+
+```bash
+PYTHONPATH=backend/src backend/.venv/bin/python scripts/litert_benchmark.py \
+  --mode image \
+  --image fixtures/frames/silverado_015s.jpg \
+  --repeats 2 \
+  --output docs/hackathon/litert-e2b-pi5-8gb-image.jsonl
+```
+
+To test another model later, pass `--model-path /path/to/model.litertlm` or set
+`ACUIFERO_NODE_MODEL_PATH`. This is only prepared for later E4B comparison; this
+card does not claim E4B results yet.
+
+## Metrics
+
+Real metrics recorded by `scripts/litert_benchmark.py`:
+
+- model name and model path
+- mode: `text`, `reasoning`, or `image`
+- backend, multimodal backend, and multimodal vision backend
+- speculative decoding setting
+- cold/warm label per mode
+- wall-clock elapsed seconds around the runtime call
+- process RSS peak MB from `resource.getrusage(RUSAGE_SELF).ru_maxrss`
+- pass/fail and error detail
+
+Metrics intentionally not estimated:
+
+- `output_token_count`: unavailable because the current
+  `LiteRTNodeRuntime`/`litert_lm` response path exposes final text/JSON only,
+  not tokenizer counts or usage metadata.
+- `decode_tok_s`: unavailable because reliable output token count is
+  unavailable.
+- `ttft_seconds`: unavailable because the current API path exposes no streaming
+  callback or first-token event.
+
+RSS note: warm-run RSS is the same process high-water mark, so it is useful as a
+memory ceiling for the benchmark process, not as an isolated per-run allocation
+delta.
+
+Observed stability note: in the measured Pi run, text and reasoning cold runs
+returned LiteRT output, but the second warm call through the same text engine
+returned no usable text after about 20 seconds. This is recorded as a failed
+warm run in JSONL rather than being smoothed over. The image/multimodal CPU/CPU
+mode succeeded on both cold and warm runs.
+
+## Initial E2B Table
+
+Measured on Raspberry Pi 5 8GB from:
+
+- `docs/hackathon/litert-e2b-pi5-8gb-text.jsonl`
+- `docs/hackathon/litert-e2b-pi5-8gb-reasoning.jsonl`
+- `docs/hackathon/litert-e2b-pi5-8gb-image.jsonl`
+
+| Model | Mode | Backend | MM backend | Vision backend | Spec decode | Run | Elapsed s | RSS peak MB | Output tokens | Decode tok/s | TTFT s | Result |
+| --- | --- | --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- |
+| gemma-4-E2B-it.litertlm | text | gpu | cpu | cpu | true | cold | 93.913 | 3067.0 | n/a | n/a | n/a | pass |
+| gemma-4-E2B-it.litertlm | text | gpu | cpu | cpu | true | warm | 20.024 | 3067.0 | n/a | n/a | n/a | fail: runtime returned no text |
+| gemma-4-E2B-it.litertlm | reasoning | gpu | cpu | cpu | true | cold | 252.926 | 3137.2 | n/a | n/a | n/a | pass |
+| gemma-4-E2B-it.litertlm | reasoning | gpu | cpu | cpu | true | warm | 20.025 | 3137.2 | n/a | n/a | n/a | fail: fallback after no usable text |
+| gemma-4-E2B-it.litertlm | image | gpu | cpu | cpu | true | cold | 28.316 | 2592.3 | n/a | n/a | n/a | pass |
+| gemma-4-E2B-it.litertlm | image | gpu | cpu | cpu | true | warm | 23.714 | 2604.3 | n/a | n/a | n/a | pass |
