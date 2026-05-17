@@ -200,16 +200,16 @@ export default function Report() {
               } disabled:opacity-50 disabled:cursor-not-allowed`}
               title={
                 !isMicSupported
-                  ? 'Grabación no soportada'
+                  ? 'Recording not supported'
                   : isRecording
-                    ? 'Detener grabación'
-                    : 'Grabar nota de voz'
+                    ? 'Stop recording'
+                    : 'Record voice note'
               }
             >
               {isRecording ? (
                 <>
                   <span className="inline-block w-2 h-2 rounded-full bg-red-600 animate-pulse" aria-hidden="true" />
-                  <span className="text-xs font-semibold">Grabando {formatElapsed(elapsedMs)}</span>
+                  <span className="text-xs font-semibold">Recording {formatElapsed(elapsedMs)}</span>
                   <Square className="w-4 h-4" />
                 </>
               ) : (
@@ -221,7 +221,7 @@ export default function Report() {
             <p className="mt-2 text-xs text-red-600">{micError}</p>
           )}
           {!isMicSupported && !micError && (
-            <p className="mt-2 text-xs text-gray-500">El navegador no soporta grabación de audio.</p>
+            <p className="mt-2 text-xs text-gray-500">Browser does not support audio recording.</p>
           )}
         </div>
 
@@ -242,7 +242,7 @@ export default function Report() {
               <div className="mt-2 flex items-center gap-2">
                 <img
                   src={photoPreviewUrl}
-                  alt="Vista previa"
+                  alt="Preview"
                   className="w-16 h-16 object-cover rounded-lg border border-gray-200"
                 />
                 <p className="text-xs text-gray-500 truncate">Queued photo: {photoFile.name}</p>
@@ -251,7 +251,7 @@ export default function Report() {
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Audio Note <span className="text-xs text-gray-400">(o subir archivo)</span>
+              Audio Note <span className="text-xs text-gray-400">(or upload file)</span>
             </label>
             <input
               key={`audio-${fileInputKey}`}

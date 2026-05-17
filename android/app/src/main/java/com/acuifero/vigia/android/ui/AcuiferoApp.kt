@@ -7,11 +7,14 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -25,7 +28,9 @@ import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Save
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -48,6 +53,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -63,12 +69,13 @@ import coil.compose.AsyncImage
 import com.acuifero.vigia.android.data.AlertSummary
 import com.acuifero.vigia.android.data.CalibrationPayload
 import com.acuifero.vigia.android.data.PendingReportEntity
+import com.acuifero.vigia.android.data.SiteSummary
 import com.google.gson.Gson
 
-private val Emerald = Color(0xFF0D3B2A)
-private val River = Color(0xFF1476B8)
-private val Clay = Color(0xFFB45F22)
-private val Sand = Color(0xFFF3E9D2)
+private val Emerald = DemoPalette.Emerald
+private val River = DemoPalette.River
+private val Clay = DemoPalette.Clay
+private val Sand = DemoPalette.SandLight
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -150,6 +157,8 @@ fun AcuiferoApp(viewModel: MainViewModel) {
                         state = siteState,
                         onAnalyzeSample = { viewModel.analyzeSample(siteId) },
                         onRefreshHydromet = { viewModel.refreshSnapshot(siteId) },
+                        onPickScenario = { scenario -> viewModel.runDemoScenario(siteId, scenario) },
+                        onClearScenario = viewModel::clearActiveScenario,
                         onSubmitReport = { name, role, transcript, offline ->
                             viewModel.submitReport(siteId, name, role, transcript, offline)
                         },
@@ -178,6 +187,18 @@ private fun DashboardScreen(
     onRefresh: () -> Unit,
     onOpenSite: (String) -> Unit,
 ) {
+    val counts = remember(state.alerts) {
+        val byLevel = state.alerts.groupBy { it.level.lowercase() }
+        intArrayOf(
+            (byLevel["red"]?.size ?: 0) + (byLevel["critical"]?.size ?: 0),
+            (byLevel["orange"]?.size ?: 0) + (byLevel["high"]?.size ?: 0),
+            (byLevel["yellow"]?.size ?: 0) + (byLevel["watch"]?.size ?: 0),
+            (byLevel["green"]?.size ?: 0) + (byLevel["low"]?.size ?: 0),
+        )
+    }
+    val topAlert = state.alerts.firstOrNull { it.level.lowercase() in setOf("red", "critical") }
+        ?: state.alerts.firstOrNull { it.level.lowercase() in setOf("orange", "high") }
+        ?: state.alerts.firstOrNull()
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -185,45 +206,93 @@ private fun DashboardScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        item { DashboardHero(state, queueCount, onRefresh) }
         item {
-            Text("Acuifero Vigia Android", style = MaterialTheme.typography.headlineMedium, color = Emerald, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(6.dp))
-            Text("MVP Android conectado al backend real, con queue offline y operaciones sobre el clip fijo demo.")
-        }
-        item {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                StatusCard(
-                    title = "LLM",
-                    body = state.runtime?.llm?.let { "${it.model} | reachable=${it.reachable}" } ?: "Sin datos",
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                StatusCard(
-                    title = "Queue",
-                    body = "$queueCount pendientes",
-                    modifier = Modifier.fillMaxWidth(),
-                )
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                MetricCard("Critical", counts[0], DemoPalette.AlertRed, Modifier.weight(1f))
+                MetricCard("High", counts[1], DemoPalette.AlertOrange, Modifier.weight(1f))
+                MetricCard("Watch", counts[2], DemoPalette.AlertYellow, Modifier.weight(1f))
+                MetricCard("Stable", counts[3], DemoPalette.AlertGreen, Modifier.weight(1f))
             }
         }
-        item {
-            Button(onClick = onRefresh) { Text(if (state.isLoading) "Refreshing..." else "Refresh dashboard") }
+        if (topAlert != null) {
+            item { TopAlertCard(topAlert, onOpenSite) }
         }
         item {
-            Text("Alertas", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+            Text("All alerts", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold, color = DemoPalette.Ink)
         }
         items(state.alerts) { alert -> AlertCard(alert) }
         item {
-            Text("Sitios", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+            Text("Sites", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold, color = DemoPalette.Ink)
         }
-        items(state.sites) { site ->
-            Card(modifier = Modifier.fillMaxWidth().clickable { onOpenSite(site.id) }) {
-                Column(Modifier.padding(16.dp)) {
-                    Text(site.name, fontWeight = FontWeight.Bold)
-                    Text(site.region)
-                    Text(site.id, style = MaterialTheme.typography.bodySmall, color = River)
-                    site.description?.let {
-                        Spacer(Modifier.height(6.dp))
-                        Text(it, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    }
+        items(state.sites) { site -> SiteRow(site, state.alerts, onOpenSite) }
+    }
+}
+
+@Composable
+private fun DashboardHero(state: DashboardState, queueCount: Int, onRefresh: () -> Unit) {
+    val llmReachable = state.runtime?.llm?.reachable == true
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .background(HeroGradient)
+            .padding(20.dp),
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                LivePulseDot(
+                    color = if (llmReachable) DemoPalette.AlertGreen else DemoPalette.AlertRed,
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    if (llmReachable) "LIVE" else "OFFLINE",
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.labelMedium,
+                )
+                Spacer(Modifier.width(12.dp))
+                Text(
+                    state.runtime?.llm?.model ?: "—",
+                    color = Color(0xFFB8D3DD),
+                    style = MaterialTheme.typography.labelMedium,
+                )
+            }
+            Text(
+                "Acuifero Vigia",
+                color = Color.White,
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                "On-edge water-level monitoring with Gemma reasoning over the camera-node clips.",
+                color = Color(0xFFD2E0E6),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Button(
+                    onClick = onRefresh,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color.White,
+                        contentColor = DemoPalette.EmeraldDeep,
+                    ),
+                ) {
+                    Icon(Icons.Rounded.Refresh, null)
+                    Spacer(Modifier.width(6.dp))
+                    Text(if (state.isLoading) "Refreshing…" else "Refresh")
+                }
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(50))
+                        .background(Color(0x33FFFFFF))
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                ) {
+                    Text(
+                        "Queue · $queueCount",
+                        color = Color.White,
+                        fontWeight = FontWeight.SemiBold,
+                        style = MaterialTheme.typography.labelMedium,
+                    )
                 }
             }
         }
@@ -231,35 +300,99 @@ private fun DashboardScreen(
 }
 
 @Composable
-private fun StatusCard(title: String, body: String, modifier: Modifier = Modifier) {
-    Card(modifier = modifier) {
-        Column(Modifier.padding(16.dp)) {
-            Text(title, fontWeight = FontWeight.Bold, color = River)
-            Spacer(Modifier.height(8.dp))
-            Text(body)
+private fun TopAlertCard(alert: AlertSummary, onOpenSite: (String) -> Unit) {
+    val severity = severityTokensFor(alert.level)
+    val pulsing = alert.level.lowercase() in setOf("red", "critical")
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .background(severity.gradient)
+            .clickable { onOpenSite(alert.siteId) }
+            .padding(18.dp),
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                SeverityBadge(severity = severity, pulsing = pulsing)
+                Text(
+                    "Top alert · ${alert.siteId}",
+                    color = Color.White.copy(alpha = 0.9f),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+            Text(
+                alert.summary,
+                color = Color.White,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                "score ${String.format("%.2f", alert.score)} · tap to inspect",
+                color = Color.White.copy(alpha = 0.85f),
+                style = MaterialTheme.typography.labelMedium,
+            )
         }
     }
 }
 
 @Composable
 private fun AlertCard(alert: AlertSummary) {
-    val chipColor = when (alert.level) {
-        "red" -> Color(0xFFB42318)
-        "orange" -> Clay
-        "yellow" -> Color(0xFFB08800)
-        else -> Emerald
+    val severity = severityTokensFor(alert.level)
+    Card(colors = CardDefaults.cardColors(containerColor = DemoPalette.SurfaceCard)) {
+        Row(modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
+            Box(
+                modifier = Modifier
+                    .width(6.dp)
+                    .fillMaxHeight()
+                    .background(severity.solid),
+            )
+            Column(Modifier.padding(14.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SeverityBadge(severity = severity)
+                    Text(alert.siteId, color = DemoPalette.InkSoft, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+                }
+                Text(alert.summary, fontWeight = FontWeight.Medium, color = DemoPalette.Ink)
+                Text(
+                    "score ${String.format("%.2f", alert.score)} · ${alert.createdAt}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = DemoPalette.InkSoft,
+                )
+                ReasoningPanel(alert)
+            }
+        }
     }
-    Card {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                AssistChip(onClick = {}, label = { Text(alert.level.uppercase()) })
-                Box(Modifier.background(chipColor, RoundedCornerShape(999.dp)).padding(horizontal = 10.dp, vertical = 4.dp)) {
-                    Text(alert.siteId, color = Color.White)
+}
+
+@Composable
+private fun SiteRow(site: SiteSummary, alerts: List<AlertSummary>, onOpenSite: (String) -> Unit) {
+    val worst = alerts.filter { it.siteId == site.id }
+        .maxByOrNull {
+            when (it.level.lowercase()) {
+                "red", "critical" -> 4
+                "orange", "high" -> 3
+                "yellow", "watch" -> 2
+                "green", "low" -> 1
+                else -> 0
+            }
+        }
+    val severity = severityTokensFor(worst?.level)
+    Card(
+        modifier = Modifier.fillMaxWidth().clickable { onOpenSite(site.id) },
+        colors = CardDefaults.cardColors(containerColor = DemoPalette.SurfaceCard),
+    ) {
+        Row(modifier = Modifier.height(IntrinsicSize.Min)) {
+            Box(modifier = Modifier.width(6.dp).fillMaxHeight().background(severity.solid))
+            Column(Modifier.padding(14.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(site.name, fontWeight = FontWeight.Bold, color = DemoPalette.Ink)
+                    if (worst != null) SeverityBadge(severity = severity)
+                }
+                Text(site.region, color = DemoPalette.InkSoft, style = MaterialTheme.typography.bodySmall)
+                site.description?.let {
+                    Text(it, maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall, color = DemoPalette.Ink)
                 }
             }
-            Text(alert.summary, fontWeight = FontWeight.Medium)
-            Text("score=${String.format("%.2f", alert.score)} | ${alert.createdAt}", style = MaterialTheme.typography.bodySmall)
-            ReasoningPanel(alert)
         }
     }
 }
@@ -271,7 +404,7 @@ private fun ReasoningPanel(alert: AlertSummary) {
     Column {
         TextButton(onClick = { expanded = !expanded }, contentPadding = PaddingValues(0.dp)) {
             Text(
-                if (expanded) "Ocultar razonamiento de Gemma" else "Razonamiento de Gemma (${alert.reasoningModel ?: "local"})",
+                if (expanded) "Hide Gemma reasoning" else "Gemma reasoning (${alert.reasoningModel ?: "local"})",
                 style = MaterialTheme.typography.bodySmall,
                 fontWeight = FontWeight.SemiBold,
             )
@@ -297,84 +430,315 @@ private fun SiteDetailScreen(
     state: SiteScreenState,
     onAnalyzeSample: () -> Unit,
     onRefreshHydromet: () -> Unit,
+    onPickScenario: (DemoScenario) -> Unit,
+    onClearScenario: () -> Unit,
     onSubmitReport: (String, String, String, Boolean) -> Unit,
     onCalibrate: () -> Unit,
 ) {
-    var reporterName by rememberSaveable { mutableStateOf("Operador Android") }
-    var reporterRole by rememberSaveable { mutableStateOf("brigadista") }
-    var transcriptText by rememberSaveable { mutableStateOf("El agua ya cruzo la marca critica y trae barro, evacuar zona baja.") }
-    var saveOffline by rememberSaveable { mutableStateOf(false) }
-
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(Sand)
             .verticalScroll(rememberScrollState())
             .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Text(state.site?.name ?: "Site", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-        state.site?.region?.let { Text(it) }
-        state.site?.sampleFrameUrl?.let { frame ->
-            AsyncImage(model = frame, contentDescription = "Calibration frame", modifier = Modifier.fillMaxWidth())
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Button(onClick = onRefreshHydromet) {
-                Icon(Icons.Rounded.Refresh, null)
-                Spacer(Modifier.height(0.dp))
-                Text("Hydromet")
+        SiteHeader(state)
+        ScenarioPickerRow(state.activeScenario, onPickScenario, onClearScenario)
+        SiteActionRow(state.isStreaming, onRefreshHydromet, onAnalyzeSample, onCalibrate)
+        AnalysisVisualization(state)
+        StreamingLog(events = state.analysisStream, isStreaming = state.isStreaming, modifier = Modifier.fillMaxWidth())
+        state.analysis?.alert?.let { AnalysisAlertCard(it) }
+        state.snapshot?.let { HydrometCard(it) }
+        VolunteerReportCard(state, onSubmitReport)
+    }
+}
+
+@Composable
+private fun SiteHeader(state: SiteScreenState) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .background(HeroGradient)
+            .padding(16.dp),
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                LivePulseDot(color = DemoPalette.RiverLight)
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    state.site?.id ?: "—",
+                    color = Color(0xFFB8D3DD),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
             }
-            Button(onClick = onAnalyzeSample) {
-                Icon(Icons.Rounded.PlayArrow, null)
-                Text("Analyze sample")
+            Text(
+                state.site?.name ?: "Site",
+                color = Color.White,
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+            )
+            state.site?.region?.let {
+                Text(it, color = Color(0xFFD2E0E6), style = MaterialTheme.typography.bodyMedium)
             }
-            Button(onClick = onCalibrate) { Text("Calibrate") }
+            state.site?.sampleFrameUrl?.let { frame ->
+                Spacer(Modifier.height(6.dp))
+                AsyncImage(
+                    model = frame,
+                    contentDescription = "Calibration frame",
+                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)),
+                )
+            }
         }
-        state.snapshot?.let { snapshot ->
-            Card {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Hydromet snapshot", fontWeight = FontWeight.Bold)
-                    Text(snapshot.summary)
-                    Text("signal=${String.format("%.0f%%", snapshot.signalScore * 100)} | rain=${snapshot.precipitationMm} mm")
+    }
+}
+
+@Composable
+private fun ScenarioPickerRow(
+    active: DemoScenario?,
+    onPick: (DemoScenario) -> Unit,
+    onClear: () -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                "Demo scenario",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = DemoPalette.Ink,
+            )
+            if (active != null) {
+                TextButton(onClick = onClear, contentPadding = PaddingValues(horizontal = 6.dp)) {
+                    Text("Clear", style = MaterialTheme.typography.labelMedium, color = DemoPalette.River)
                 }
             }
         }
-        state.analysis?.let { analysis ->
-            Card {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Node analysis", fontWeight = FontWeight.Bold)
-                    Text("frames=${analysis.observation.framesAnalyzed} | ratio=${String.format("%.2f", analysis.observation.waterlineRatio)}")
-                    Text("alert=${analysis.alert.level} | ${analysis.alert.summary}")
-                    analysis.observation.evidenceFrameUrl?.let { evidence ->
-                        AsyncImage(model = evidence, contentDescription = "Evidence frame", modifier = Modifier.fillMaxWidth())
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            DemoScenario.entries.forEach { scenario ->
+                ScenarioChip(
+                    scenario = scenario,
+                    selected = active == scenario,
+                    onClick = { onPick(scenario) },
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SiteActionRow(
+    streaming: Boolean,
+    onRefreshHydromet: () -> Unit,
+    onAnalyzeSample: () -> Unit,
+    onCalibrate: () -> Unit,
+) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+        Button(
+            onClick = onRefreshHydromet,
+            modifier = Modifier.weight(1f),
+            colors = ButtonDefaults.buttonColors(containerColor = DemoPalette.River),
+        ) {
+            Icon(Icons.Rounded.Refresh, null)
+            Spacer(Modifier.width(4.dp))
+            Text("Hydromet", style = MaterialTheme.typography.labelMedium)
+        }
+        Button(
+            onClick = onAnalyzeSample,
+            enabled = !streaming,
+            modifier = Modifier.weight(1f),
+            colors = ButtonDefaults.buttonColors(containerColor = DemoPalette.EmeraldSoft),
+        ) {
+            Icon(Icons.Rounded.PlayArrow, null)
+            Spacer(Modifier.width(4.dp))
+            Text(if (streaming) "Streaming…" else "Analyze", style = MaterialTheme.typography.labelMedium)
+        }
+        Button(
+            onClick = onCalibrate,
+            modifier = Modifier.weight(1f),
+            colors = ButtonDefaults.buttonColors(containerColor = DemoPalette.Clay),
+        ) {
+            Text("Calibrate", style = MaterialTheme.typography.labelMedium)
+        }
+    }
+}
+
+@Composable
+private fun AnalysisVisualization(state: SiteScreenState) {
+    val observation = state.analysis?.observation
+    val ratio = observation?.waterlineRatio?.toFloat() ?: 0f
+    val velocity = observation?.riseVelocity?.toFloat() ?: 0f
+    val severity = severityTokensFor(state.analysis?.alert?.level)
+    Card(colors = CardDefaults.cardColors(containerColor = DemoPalette.SurfaceCard)) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "Waterline analysis",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = DemoPalette.Ink,
+                )
+                Spacer(Modifier.width(8.dp))
+                if (state.isStreaming) {
+                    LivePulseDot(color = DemoPalette.RiverLight, size = 8)
+                }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+                WaterlineGauge(
+                    ratio = ratio,
+                    severity = severity,
+                    modifier = Modifier.weight(1.2f),
+                )
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    RiseVelocityMeter(cmPerHour = velocity)
+                    Column {
+                        Text("Frames analyzed", style = MaterialTheme.typography.labelMedium, color = DemoPalette.InkSoft)
+                        Text(
+                            (observation?.framesAnalyzed ?: 0).toString(),
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.titleLarge,
+                            color = DemoPalette.Ink,
+                        )
+                    }
+                    Column {
+                        Text("Confidence", style = MaterialTheme.typography.labelMedium, color = DemoPalette.InkSoft)
+                        Text(
+                            "%.0f%%".format((observation?.confidence ?: 0.0) * 100),
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.titleLarge,
+                            color = DemoPalette.Ink,
+                        )
                     }
                 }
             }
         }
-        Card {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("Volunteer report", fontWeight = FontWeight.Bold)
-                OutlinedTextField(value = reporterName, onValueChange = { reporterName = it }, label = { Text("Reporter name") }, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(value = reporterRole, onValueChange = { reporterRole = it }, label = { Text("Role") }, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(value = transcriptText, onValueChange = { transcriptText = it }, label = { Text("Transcript") }, modifier = Modifier.fillMaxWidth(), minLines = 4)
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Switch(checked = saveOffline, onCheckedChange = { saveOffline = it })
-                    Text("Force offline queue")
+    }
+}
+
+@Composable
+private fun AnalysisAlertCard(alert: AlertSummary) {
+    val severity = severityTokensFor(alert.level)
+    val pulsing = alert.level.lowercase() in setOf("red", "critical")
+    val typedSummary = rememberTyping(alert.summary)
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(severity.gradient)
+            .padding(16.dp),
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                SeverityBadge(severity = severity, pulsing = pulsing)
+                Text(
+                    "score ${String.format("%.2f", alert.score)}",
+                    color = Color.White.copy(alpha = 0.9f),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+            Text(
+                typedSummary,
+                color = Color.White,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+            alert.reasoningChain?.let { chain ->
+                val parsed = try {
+                    Gson().fromJson(chain, Array<String>::class.java)?.toList() ?: emptyList()
+                } catch (_: Exception) {
+                    listOf(chain.trim('[', ']').replace("\"", ""))
                 }
-                Button(onClick = { onSubmitReport(reporterName, reporterRole, transcriptText, saveOffline) }, enabled = !state.isSubmitting) {
-                    Text(if (state.isSubmitting) "Submitting..." else "Send report")
+                parsed.forEach { step ->
+                    Text(
+                        "» $step",
+                        color = Color.White.copy(alpha = 0.92f),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
                 }
-                state.reportResult?.let { result ->
-                    val parserLabel = when (result.parsed.parserSource) {
-                        "gemma-android" -> "Analizado con Gemma en este dispositivo"
-                        "llm" -> "Analizado por Gemma en el servidor"
-                        "rules" -> "Estructurado por reglas locales"
-                        else -> "Origen: ${result.parsed.parserSource}"
-                    }
-                    AssistChip(onClick = {}, label = { Text(parserLabel) })
-                    Text("parser=${result.parsed.parserSource} | urgency=${result.parsed.urgency} | water=${result.parsed.waterLevelCategory}")
-                    Text(result.alert.summary)
+            }
+        }
+    }
+}
+
+@Composable
+private fun HydrometCard(snapshot: com.acuifero.vigia.android.data.ExternalSnapshot) {
+    Card(colors = CardDefaults.cardColors(containerColor = DemoPalette.SurfaceCard)) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Hydromet", fontWeight = FontWeight.SemiBold, color = DemoPalette.Ink, style = MaterialTheme.typography.titleSmall)
+                Spacer(Modifier.width(8.dp))
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(50))
+                        .background(DemoPalette.River.copy(alpha = 0.12f))
+                        .padding(horizontal = 8.dp, vertical = 2.dp),
+                ) {
+                    Text(
+                        "signal ${String.format("%.0f%%", snapshot.signalScore * 100)}",
+                        color = DemoPalette.River,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                    )
                 }
+            }
+            Text(snapshot.summary, color = DemoPalette.Ink, style = MaterialTheme.typography.bodyMedium)
+            Text(
+                "rain ${snapshot.precipitationMm} mm · p(rain) ${String.format("%.0f%%", snapshot.precipitationProbability * 100)}",
+                style = MaterialTheme.typography.bodySmall,
+                color = DemoPalette.InkSoft,
+            )
+        }
+    }
+}
+
+@Composable
+private fun VolunteerReportCard(
+    state: SiteScreenState,
+    onSubmitReport: (String, String, String, Boolean) -> Unit,
+) {
+    var reporterName by rememberSaveable { mutableStateOf("Android Operator") }
+    var reporterRole by rememberSaveable { mutableStateOf("brigade member") }
+    var transcriptText by rememberSaveable { mutableStateOf("Water has already crossed the critical mark and brings mud, evacuate low zone.") }
+    var saveOffline by rememberSaveable { mutableStateOf(false) }
+    Card(colors = CardDefaults.cardColors(containerColor = DemoPalette.SurfaceCard)) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("Volunteer report", fontWeight = FontWeight.SemiBold, color = DemoPalette.Ink, style = MaterialTheme.typography.titleSmall)
+            OutlinedTextField(value = reporterName, onValueChange = { reporterName = it }, label = { Text("Reporter") }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(value = reporterRole, onValueChange = { reporterRole = it }, label = { Text("Role") }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(value = transcriptText, onValueChange = { transcriptText = it }, label = { Text("Transcript") }, modifier = Modifier.fillMaxWidth(), minLines = 3)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Switch(checked = saveOffline, onCheckedChange = { saveOffline = it })
+                Text("Force offline queue", color = DemoPalette.Ink, style = MaterialTheme.typography.bodyMedium)
+            }
+            Button(
+                onClick = { onSubmitReport(reporterName, reporterRole, transcriptText, saveOffline) },
+                enabled = !state.isSubmitting,
+                colors = ButtonDefaults.buttonColors(containerColor = DemoPalette.Emerald),
+            ) {
+                Text(if (state.isSubmitting) "Submitting…" else "Send report")
+            }
+            state.reportResult?.let { result ->
+                val parserLabel = when (result.parsed.parserSource) {
+                    "gemma-android" -> "Analyzed with Gemma on this device"
+                    "llm" -> "Analyzed by Gemma on the server"
+                    "rules" -> "Structured by local rules"
+                    else -> "Source: ${result.parsed.parserSource}"
+                }
+                AssistChip(onClick = {}, label = { Text(parserLabel) })
+                val typedSummary = rememberTyping(result.alert.summary)
+                Text(
+                    "urgency ${result.parsed.urgency} · water ${result.parsed.waterLevelCategory}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = DemoPalette.InkSoft,
+                )
+                Text(typedSummary, color = DemoPalette.Ink, fontWeight = FontWeight.Medium)
             }
         }
     }
@@ -441,15 +805,45 @@ private fun QueueScreen(reports: List<PendingReportEntity>, onFlush: () -> Unit)
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text("Offline queue", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-        Button(onClick = onFlush, enabled = reports.isNotEmpty()) { Text("Flush queue") }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("Offline queue", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = DemoPalette.Ink)
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(DemoPalette.Clay.copy(alpha = 0.15f))
+                    .padding(horizontal = 10.dp, vertical = 4.dp),
+            ) {
+                Text(
+                    "${reports.size} pending",
+                    color = DemoPalette.Clay,
+                    fontWeight = FontWeight.SemiBold,
+                    style = MaterialTheme.typography.labelMedium,
+                )
+            }
+        }
+        Button(
+            onClick = onFlush,
+            enabled = reports.isNotEmpty(),
+            colors = ButtonDefaults.buttonColors(containerColor = DemoPalette.River),
+        ) {
+            Icon(Icons.Rounded.CloudUpload, null)
+            Spacer(Modifier.width(6.dp))
+            Text("Flush queue")
+        }
         LazyColumn(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(reports) { report ->
-                Card {
-                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text(report.siteId, fontWeight = FontWeight.Bold)
-                        Text("${report.reporterName} | ${report.reporterRole}")
-                        Text(report.transcriptText)
+                Card(colors = CardDefaults.cardColors(containerColor = DemoPalette.SurfaceCard)) {
+                    Row(modifier = Modifier.height(IntrinsicSize.Min)) {
+                        Box(modifier = Modifier.width(4.dp).fillMaxHeight().background(DemoPalette.Clay))
+                        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(report.siteId, fontWeight = FontWeight.Bold, color = DemoPalette.Ink)
+                            Text(
+                                "${report.reporterName} · ${report.reporterRole}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = DemoPalette.InkSoft,
+                            )
+                            Text(report.transcriptText, color = DemoPalette.Ink, style = MaterialTheme.typography.bodyMedium)
+                        }
                     }
                 }
             }
@@ -473,7 +867,7 @@ private fun SettingsScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text("Settings", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-        Text("Por defecto el emulador usa 10.0.2.2 para llegar al backend FastAPI local.")
+        Text("By default the emulator uses 10.0.2.2 to reach the local FastAPI backend.")
         OutlinedTextField(value = editableUrl, onValueChange = { editableUrl = it }, label = { Text("API base URL") }, modifier = Modifier.fillMaxWidth())
         Button(onClick = { onSaveServerUrl(editableUrl) }) { Text("Save URL") }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {

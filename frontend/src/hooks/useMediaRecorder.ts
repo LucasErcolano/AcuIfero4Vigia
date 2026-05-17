@@ -58,7 +58,7 @@ export function useMediaRecorder(): UseMediaRecorderResult {
   const start = useCallback(async () => {
     setError(null);
     if (!isSupported) {
-      setError('El navegador no soporta grabación de audio.');
+      setError('Browser does not support audio recording.');
       return;
     }
     try {
@@ -87,7 +87,7 @@ export function useMediaRecorder(): UseMediaRecorderResult {
       };
 
       recorder.onerror = () => {
-        setError('Falló la grabación.');
+        setError('Recording failed.');
         cleanupStream();
         clearTimer();
         setIsRecording(false);
@@ -108,9 +108,9 @@ export function useMediaRecorder(): UseMediaRecorderResult {
       setIsRecording(false);
       const name = (err as DOMException | null)?.name;
       if (name === 'NotAllowedError' || name === 'SecurityError') {
-        setError('Permiso de micrófono denegado.');
+        setError('Microphone permission denied.');
       } else {
-        setError('Falló la grabación.');
+        setError('Recording failed.');
       }
     }
   }, [isSupported, cleanupStream, clearTimer]);
@@ -124,7 +124,7 @@ export function useMediaRecorder(): UseMediaRecorderResult {
         cleanupStream();
         clearTimer();
         setIsRecording(false);
-        setError('Falló la grabación.');
+        setError('Recording failed.');
       }
     } else {
       cleanupStream();

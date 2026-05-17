@@ -52,11 +52,11 @@ import type {
 const DEMO_SITE: Site = {
   id: 'silverado-fixed-cam-usgs',
   name: 'Silverado Fixed Cam (USGS)',
-  region: 'Demo · clip público USGS · sample state',
+  region: 'Demo · public USGS clip · sample state',
   lat: 33.74,
   lng: -117.65,
   description:
-    'Sitio bundled del repo. Sirve como referencia E2E del pipeline CV+Gemma sobre un clip real.',
+    'Bundled repo site. Serves as E2E reference for the CV+Gemma pipeline on a real clip.',
   is_active: true,
 };
 
@@ -66,55 +66,55 @@ const DEMO_ALERT: FusedAlert = {
   level: 'red',
   score: 0.87,
   summary:
-    'Línea crítica cruzada a t=078s. Corroborado por reporte de brigadista y probabilidad de lluvia 12h del 68%.',
+    'Critical line crossed at t=078s. Corroborated by brigade report and 68% 12h rain probability.',
   created_at: new Date(Date.now() - 1000 * 60 * 3).toISOString(),
   trigger_source: 'fused',
   reasoning_summary:
-    'La franja media-baja del cuadro pasó de seco a turbio en 12 frames consecutivos. ' +
-    'Velocidad de subida 0.0034/frame supera el umbral interno (0.0020). ' +
-    'Reporte voluntario en español confirma el cruce de la marca crítica. Confianza 78%.',
+    'The mid-lower band of the frame went from dry to turbid over 12 consecutive frames. ' +
+    'Rise velocity 0.0034/frame exceeds internal threshold (0.0020). ' +
+    'Volunteer report confirms crossing of the critical mark. Confidence 78%.',
   reasoning_chain: JSON.stringify([
     'observation.crossed_critical_line = true (waterline_ratio 0.42 > 0.30)',
-    'rise_velocity 0.0034/frame > umbral 0.0020 → señal de subida sostenida',
-    'reporte voluntario coincide léxicamente con "cruzó la marca crítica"',
-    'hidromet probabilidad 12h = 68% → corrobora hipótesis de evento',
+    'rise_velocity 0.0034/frame > threshold 0.0020 → sustained rise signal',
+    'volunteer report lexically matches "crossed the critical mark"',
+    'hydromet 12h probability = 68% → corroborates event hypothesis',
     'fused_score = 0.87 → nivel RED, emit_cap_xml habilitado',
   ]),
   reasoning_model: 'gemma4:e2b',
 };
 
 const DEMO_FUSION: SignalInput[] = [
-  { source: 'camera',    score: 0.87, status: 'ok',    detail: 'Cruzó línea crítica · 126 frames analizados', ageSeconds: 8 },
-  { source: 'volunteer', score: 0.62, status: 'ok',    detail: '"El agua ya cruzó la marca crítica y trae barro" · 1 reporte', ageSeconds: 92 },
+  { source: 'camera',    score: 0.87, status: 'ok',    detail: 'Crossed critical line · 126 frames analyzed', ageSeconds: 8 },
+  { source: 'volunteer', score: 0.62, status: 'ok',    detail: '"Water already crossed the critical mark and carries mud" · 1 report', ageSeconds: 92 },
   { source: 'hydromet',  score: 0.45, status: 'ok',    detail: 'Open-Meteo · 12.4 mm/h · prob 12h 68%',          ageSeconds: 240 },
 ];
 
 const DEMO_AUDIT: AuditEntry[] = [
-  { rule: 'RULE_CRITICAL_LINE_CROSSED',     outcome: 'fired',     detail: 'CV node observación: waterline_ratio 0.42 cruzó la línea calibrada y=120.' },
-  { rule: 'RULE_RISE_VELOCITY',             outcome: 'fired',     detail: 'rise_velocity 0.0034/frame > umbral 0.0020/frame.' },
-  { rule: 'RULE_VOLUNTEER_CORROBORATION',   outcome: 'fired',     detail: '1 reporte voluntario clasificado por Gemma con urgencia=alta en los últimos 5 min.' },
-  { rule: 'RULE_HYDROMET_AGREEMENT',        outcome: 'fired',     detail: 'Open-Meteo probabilidad 12h 68% supera umbral 50%.' },
-  { rule: 'RULE_DUPLICATE_SUPPRESSION',     outcome: 'not_fired', detail: 'No se encontró alerta activa previa para este sitio en ventana de 30 min.' },
-  { rule: 'RULE_MANUAL_OVERRIDE',           outcome: 'not_fired', detail: 'Operador no aplicó override manual.' },
+  { rule: 'RULE_CRITICAL_LINE_CROSSED',     outcome: 'fired',     detail: 'CV node observation: waterline_ratio 0.42 crossed calibrated line y=120.' },
+  { rule: 'RULE_RISE_VELOCITY',             outcome: 'fired',     detail: 'rise_velocity 0.0034/frame > threshold 0.0020/frame.' },
+  { rule: 'RULE_VOLUNTEER_CORROBORATION',   outcome: 'fired',     detail: '1 volunteer report classified by Gemma with urgency=high in last 5 min.' },
+  { rule: 'RULE_HYDROMET_AGREEMENT',        outcome: 'fired',     detail: 'Open-Meteo 12h probability 68% exceeds threshold 50%.' },
+  { rule: 'RULE_DUPLICATE_SUPPRESSION',     outcome: 'not_fired', detail: 'No prior active alert found for this site in 30 min window.' },
+  { rule: 'RULE_MANUAL_OVERRIDE',           outcome: 'not_fired', detail: 'Operator did not apply manual override.' },
 ];
 
 const DEMO_TIMELINE_FACTORY = (): TimelineEvent[] => {
   const now = Date.now();
   const t = (deltaSec: number) => new Date(now + deltaSec * 1000).toISOString();
   return [
-    { at: t(-240), kind: 'detect',    label: 'Detección CV',          detail: 'Nodo Silverado: rise_velocity > umbral',  done: true },
-    { at: t(-185), kind: 'volunteer', label: 'Reporte voluntario',    detail: 'Brigadista María G. (Vigía Android)',     done: true },
-    { at: t(-145), kind: 'fuse',      label: 'Fusión de señales',     detail: 'fused_score = 0.87 · level = red',        done: true },
-    { at: t(-90),  kind: 'cap',       label: 'CAP v1.2 emitido',       detail: 'receipt CAP-2026-05-16-0042',             done: true },
-    { at: t(-70),  kind: 'siren',     label: 'Sirena disparada',       detail: 'GPIO relay zona baja',                    done: true },
-    { at: t(-30),  kind: 'notify',    label: 'Defensa Civil notificada',detail: 'Webhook municipal acusó recibo',         done: true },
-    { at: t(60),   kind: 'sync',      label: 'Próxima ventana CV',     detail: 'Re-análisis automático en 60s',           done: false },
+    { at: t(-240), kind: 'detect',    label: 'CV detection',            detail: 'Silverado node: rise_velocity > threshold', done: true },
+    { at: t(-185), kind: 'volunteer', label: 'Volunteer report',       detail: 'Brigade member María G. (Vigía Android)', done: true },
+    { at: t(-145), kind: 'fuse',      label: 'Signal fusion',          detail: 'fused_score = 0.87 · level = red',        done: true },
+    { at: t(-90),  kind: 'cap',       label: 'CAP v1.2 emitted',       detail: 'receipt CAP-2026-05-16-0042',             done: true },
+    { at: t(-70),  kind: 'siren',     label: 'Siren triggered',        detail: 'GPIO relay low zone',                     done: true },
+    { at: t(-30),  kind: 'notify',    label: 'Civil Defense notified', detail: 'Municipal webhook acknowledged',          done: true },
+    { at: t(60),   kind: 'sync',      label: 'Next CV window',         detail: 'Automatic re-analysis in 60s',            done: false },
   ];
 };
 
 const DEMO_CAP = {
   status: 'emitted' as const,
-  lastEmit: new Date(Date.now() - 1000 * 90).toLocaleString('es-AR', {
+  lastEmit: new Date(Date.now() - 1000 * 90).toLocaleString('en-US', {
     hour: '2-digit', minute: '2-digit', second: '2-digit', day: '2-digit', month: '2-digit',
   }),
   receiptId: 'CAP-2026-05-16-0042',
@@ -208,7 +208,7 @@ export default function Dashboard() {
       const b = best[src];
       if (!b) return {
         source: src, score: 0, status: 'missing' as const,
-        detail: 'sin senal en ventana de 45 min', model: MODEL_BY_SRC[src],
+        detail: 'no signal in 45 min window', model: MODEL_BY_SRC[src],
       };
       const ageSec = Math.max(0, Math.round((now - b.observed) / 1000));
       return {
@@ -227,32 +227,32 @@ export default function Dashboard() {
     const fired: string[] = Array.isArray(liveTrace.rules_fired) ? liveTrace.rules_fired.map(String) : [];
     const has = (needle: string) => fired.some((r) => r.includes(needle));
     const entries: AuditEntry[] = [
-      { rule: 'RULE_NODE_CRITICAL_LINE',     outcome: has('node_critical_line_crossed') ? 'fired' : 'not_fired', detail: 'Camara fija cruzo la linea critica calibrada.' },
-      { rule: 'RULE_NODE_FAST_RISE',         outcome: has('node_fast_rise') ? 'fired' : 'not_fired',           detail: 'rise_velocity supera umbral 0.08/frame.' },
-      { rule: 'RULE_VOLUNTEER_MARK_EXCEEDED', outcome: has('volunteer_mark_exceeded') ? 'fired' : 'not_fired', detail: 'Reporte humano confirma marca de agua excedida.' },
-      { rule: 'RULE_VOLUNTEER_ROAD_CUT',     outcome: has('volunteer_road_cut') ? 'fired' : 'not_fired',       detail: 'Reporte ciudadano: via cortada / intransitable.' },
-      { rule: 'RULE_VOLUNTEER_HOMES_AFFECTED', outcome: has('volunteer_homes_affected') ? 'fired' : 'not_fired', detail: 'Reporte ciudadano: agua dentro de viviendas.' },
-      { rule: 'RULE_CORROBORATION_MULTI_SRC', outcome: has('corroboration_sources') ? 'fired' : 'not_fired',   detail: 'Dos o mas fuentes con score >= 0.35.' },
-      { rule: 'RULE_TWO_MEDIUM_TO_ORANGE',   outcome: has('two_medium_sources_escalate_to_orange') ? 'fired' : 'not_fired', detail: 'Dos fuentes en banda media -> escalada a naranja.' },
+      { rule: 'RULE_NODE_CRITICAL_LINE',     outcome: has('node_critical_line_crossed') ? 'fired' : 'not_fired', detail: 'Fixed camera crossed calibrated critical line.' },
+      { rule: 'RULE_NODE_FAST_RISE',         outcome: has('node_fast_rise') ? 'fired' : 'not_fired',           detail: 'rise_velocity exceeds threshold 0.08/frame.' },
+      { rule: 'RULE_VOLUNTEER_MARK_EXCEEDED', outcome: has('volunteer_mark_exceeded') ? 'fired' : 'not_fired', detail: 'Human report confirms water mark exceeded.' },
+      { rule: 'RULE_VOLUNTEER_ROAD_CUT',     outcome: has('volunteer_road_cut') ? 'fired' : 'not_fired',       detail: 'Citizen report: road cut / impassable.' },
+      { rule: 'RULE_VOLUNTEER_HOMES_AFFECTED', outcome: has('volunteer_homes_affected') ? 'fired' : 'not_fired', detail: 'Citizen report: water inside homes.' },
+      { rule: 'RULE_CORROBORATION_MULTI_SRC', outcome: has('corroboration_sources') ? 'fired' : 'not_fired',   detail: 'Two or more sources with score >= 0.35.' },
+      { rule: 'RULE_TWO_MEDIUM_TO_ORANGE',   outcome: has('two_medium_sources_escalate_to_orange') ? 'fired' : 'not_fired', detail: 'Two sources in mid band -> escalated to orange.' },
     ];
     return entries;
   }, [liveTrace]);
 
   const invokeAction = (fn: ActionCall['fn']) => {
     setActionState((prev) => ({ ...prev, [fn]: { busy: true } }));
-    const at = new Date().toLocaleTimeString('es-AR');
+    const at = new Date().toLocaleTimeString('en-US');
     setActionLog((prev) => [`${at}  function_call → ${fn}(...)`, ...prev].slice(0, 5));
 
     setTimeout(() => {
       setActionState((prev) => ({ ...prev, [fn]: { busy: false } }));
-      setActionLog((prev) => [`${new Date().toLocaleTimeString('es-AR')}  ✓ ${fn} ok`, ...prev].slice(0, 5));
+      setActionLog((prev) => [`${new Date().toLocaleTimeString('en-US')}  ✓ ${fn} ok`, ...prev].slice(0, 5));
       // mirror the action into the timeline so the demo loop closes visibly
       const at2 = new Date().toISOString();
       const map: Partial<Record<ActionCall['fn'], TimelineEvent>> = {
-        emit_cap_xml:         { at: at2, kind: 'cap',    label: 'CAP v1.2 emitido',          detail: 'Re-emisión manual del operador',     done: true },
-        trigger_siren:        { at: at2, kind: 'siren',  label: 'Sirena disparada',          detail: 'Operador disparó relay',             done: true },
-        send_lora_alert:      { at: at2, kind: 'notify', label: 'Alerta LoRa enviada',       detail: 'Broadcast hacia nodos hermanos',     done: true },
-        notify_civil_defense: { at: at2, kind: 'notify', label: 'Defensa Civil notificada',  detail: 'Re-envío manual al webhook',         done: true },
+        emit_cap_xml:         { at: at2, kind: 'cap',    label: 'CAP v1.2 emitted',          detail: 'Manual operator re-emission',        done: true },
+        trigger_siren:        { at: at2, kind: 'siren',  label: 'Siren triggered',           detail: 'Operator triggered relay',           done: true },
+        send_lora_alert:      { at: at2, kind: 'notify', label: 'LoRa alert sent',           detail: 'Broadcast to sibling nodes',         done: true },
+        notify_civil_defense: { at: at2, kind: 'notify', label: 'Civil Defense notified',    detail: 'Manual webhook re-send',             done: true },
       };
       const event = map[fn];
       if (event) {
@@ -263,7 +263,7 @@ export default function Dashboard() {
 
   const actions: ActionCall[] = [
     { fn: 'emit_cap_xml',         arg: `site=${activeAlert.site_id}`, busy: actionState.emit_cap_xml.busy },
-    { fn: 'trigger_siren',        arg: 'zona=baja',                    busy: actionState.trigger_siren.busy },
+    { fn: 'trigger_siren',        arg: 'zone=low',                     busy: actionState.trigger_siren.busy },
     { fn: 'send_lora_alert',      arg: 'broadcast',                    busy: actionState.send_lora_alert.busy },
     { fn: 'notify_civil_defense', arg: 'webhook=municipal',            busy: actionState.notify_civil_defense.busy },
   ];
@@ -289,16 +289,16 @@ export default function Dashboard() {
       <div className="cc-grid">
         {/* Left column: signals → evidence → reasoning → audit */}
         <div className="space-y-4">
-          <SectionPanel title="Fusión de señales" meta={`fused_score = ${activeAlert.score.toFixed(2)}`}>
+          <SectionPanel title="Signal fusion" meta={`fused_score = ${activeAlert.score.toFixed(2)}`}>
             <SignalFusionRow inputs={liveSignals} />
           </SectionPanel>
 
-          <SectionPanel title="Frame de evidencia · narración Gemma" meta={activeAlert.reasoning_model ?? 'local'}>
+          <SectionPanel title="Evidence frame · Gemma narration" meta={activeAlert.reasoning_model ?? 'local'}>
             <EvidencePanel
               frameUrl={null}
               description={
-                'Agua turbia cubre la franja inferior del encuadre y supera la línea crítica calibrada. ' +
-                'Vegetación parcialmente sumergida en el margen derecho; sin infraestructura visible en riesgo aún.'
+                'Turbid water covers the lower band of the frame and exceeds the calibrated critical line. ' +
+                'Vegetation partially submerged on the right margin; no visible infrastructure at risk yet.'
               }
               model={activeAlert.reasoning_model}
               confidence={0.78}
@@ -336,7 +336,7 @@ export default function Dashboard() {
           <OfflineSyncCard
             isOnline={isOnline}
             queueCount={queueCount}
-            lastSync={isOnline ? new Date().toLocaleTimeString('es-AR') : null}
+            lastSync={isOnline ? new Date().toLocaleTimeString('en-US') : null}
           />
         </div>
       </div>
@@ -386,7 +386,7 @@ function SitesGrid({ sites, isOnline }: { sites: Site[]; isOnline: boolean }) {
   return (
     <section>
       <h2 className="text-sm font-bold uppercase tracking-widest text-slate-800 mb-3">
-        Sitios monitoreados
+        Monitored sites
       </h2>
       <div className="grid gap-3 md:grid-cols-2">
         {sites.map((site) => (
@@ -405,15 +405,15 @@ function SitesGrid({ sites, isOnline }: { sites: Site[]; isOnline: boolean }) {
                   site.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
                 }`}
               >
-                {site.is_active ? 'Activo' : 'Inactivo'}
+                {site.is_active ? 'Active' : 'Inactive'}
               </span>
             </div>
             <div className="mt-3 text-sm text-blue-600 font-medium inline-flex items-center gap-1">
-              Abrir sitio <ArrowRight className="w-4 h-4" />
+              Open site <ArrowRight className="w-4 h-4" />
             </div>
             {!isOnline && (
               <div className="text-xs text-gray-400 mt-2">
-                Offline — datos del último cache disponibles
+                Offline — data from last available cache
               </div>
             )}
           </Link>

@@ -258,16 +258,16 @@ export default function SiteDetail() {
         lat: site.lat,
         lon: site.lng,
         severity,
-        headline: `Alerta ${severity} en ${site.name}`,
-        instruction: 'Coordinar con Defensa Civil antes de difusion publica.',
+        headline: `${severity} alert at ${site.name}`,
+        instruction: 'Coordinate with Civil Defense before public dissemination.',
         summary: analysisResult.alert.summary,
         areaDesc: site.region,
       });
       setCapXml(xml);
-      pushAction(`CAP XML emitido (${severity}) para ${site.name}`);
+      pushAction(`CAP XML emitted (${severity}) for ${site.name}`);
     } catch (capError) {
       console.error(capError);
-      setError('No se pudo emitir el CAP. Revisar backend.');
+      setError('Could not emit CAP. Check backend.');
     } finally {
       setIsEmittingCap(false);
     }
@@ -284,18 +284,18 @@ export default function SiteDetail() {
       if (!res.ok) throw new Error(await res.text());
       const json = await res.text();
       setSinagirJson(json);
-      pushAction(`SINAGIR JSON exportado para alerta #${analysisResult.alert.id}`);
+      pushAction(`SINAGIR JSON exported for alert #${analysisResult.alert.id}`);
     } catch (e) {
       console.error(e);
-      setError('No se pudo exportar SINAGIR.');
+      setError('Could not export SINAGIR.');
     } finally {
       setIsExportingSinagir(false);
     }
   };
 
-  const simulateSiren = () => pushAction('Sirena: disparo SIMULADO (demo, sin actuador real)');
-  const simulateLora = () => pushAction('LoRa: payload SIMULADO emitido (demo, sin radio real)');
-  const simulateNotify = () => pushAction('Notificacion: push SIMULADO a operador (demo)');
+  const simulateSiren = () => pushAction('Siren: SIMULATED trigger (demo, no real actuator)');
+  const simulateLora = () => pushAction('LoRa: SIMULATED payload emitted (demo, no real radio)');
+  const simulateNotify = () => pushAction('Notification: SIMULATED push to operator (demo)');
 
   const runBundledSample = async () => {
     if (!id) {
@@ -487,7 +487,7 @@ export default function SiteDetail() {
                 {analysisResult.alert.reasoning_summary && (
                   <details className="mt-3 rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
                     <summary className="cursor-pointer font-semibold text-blue-800">
-                      Razonamiento de Gemma ({analysisResult.alert.reasoning_model ?? 'local'})
+                      Gemma reasoning ({analysisResult.alert.reasoning_model ?? 'local'})
                     </summary>
                     <p className="mt-2 whitespace-pre-wrap">{analysisResult.alert.reasoning_summary}</p>
                     {parseChain(analysisResult.alert.reasoning_chain).length > 0 && (

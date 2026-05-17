@@ -20,6 +20,7 @@ import com.acuifero.vigia.android.data.SiteDetail
 import com.acuifero.vigia.android.data.SiteSummary
 import com.acuifero.vigia.android.data.VolunteerReport
 import com.google.gson.Gson
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -43,6 +44,9 @@ data class SiteScreenState(
     val reportResult: ReportEnvelope? = null,
     val isLoading: Boolean = false,
     val isSubmitting: Boolean = false,
+    val isStreaming: Boolean = false,
+    val activeScenario: DemoScenario? = null,
+    val analysisStream: List<AnalysisStreamEvent> = emptyList(),
     val message: String? = null,
     val error: String? = null,
 )
@@ -116,13 +120,74 @@ class MainViewModel(
         }
     }
 
+    /**
+     * Run the real backend analysis while overlaying a scripted streaming log
+     * so the demo feels alive. The two run in parallel; the result lands once
+     * both the API call and the scripted stream complete.
+     */
     fun analyzeSample(siteId: String) {
         viewModelScope.launch {
-            _siteState.value = _siteState.value.copy(isLoading = true, error = null)
-            runCatching { repository.analyzeSample(siteId) }
-                .onSuccess { result -> _siteState.value = _siteState.value.copy(analysis = result, isLoading = false) }
-                .onFailure { error -> _siteState.value = _siteState.value.copy(isLoading = false, error = error.message) }
+            val scenario = _siteState.value.activeScenario
+            _siteState.value = _siteState.value.copy(
+                isStreaming = true,
+                error = null,
+                analysisStream = emptyList(),
+            )
+            val deferredAnalysis = async {
+                runCatching { repository.analyzeSample(siteId) }
+            }
+            AnalysisScript.stream(scenario).collect { event ->
+                val current = _siteState.value
+                _siteState.value = current.copy(analysisStream = current.analysisStream + event)
+            }
+            deferredAnalysis.await()
+                .onSuccess { result ->
+                    _siteState.value = _siteState.value.copy(
+                        analysis = result,
+                        isStreaming = false,
+                    )
+                }
+                .onFailure { error ->
+                    _siteState.value = _siteState.value.copy(
+                        isStreaming = false,
+                        error = error.message,
+                    )
+                }
         }
+    }
+
+    /**
+     * Demo helper: pick a canned scenario and run the streaming animation
+     * over a mock analysis response. Useful when presenting without a live
+     * water-level signal to drive the real backend.
+     */
+    fun runDemoScenario(siteId: String, scenario: DemoScenario) {
+        viewModelScope.launch {
+            _siteState.value = _siteState.value.copy(
+                activeScenario = scenario,
+                isStreaming = true,
+                analysisStream = emptyList(),
+                analysis = null,
+                error = null,
+            )
+            AnalysisScript.stream(scenario).collect { event ->
+                val current = _siteState.value
+                _siteState.value = current.copy(analysisStream = current.analysisStream + event)
+            }
+            _siteState.value = _siteState.value.copy(
+                analysis = DemoMocks.analysis(scenario, siteId),
+                isStreaming = false,
+                message = "Demo scenario: ${scenario.label}.",
+            )
+        }
+    }
+
+    fun clearActiveScenario() {
+        _siteState.value = _siteState.value.copy(
+            activeScenario = null,
+            analysisStream = emptyList(),
+            analysis = null,
+        )
     }
 
     fun submitReport(siteId: String, reporterName: String, reporterRole: String, transcriptText: String, forceOffline: Boolean) {
@@ -145,7 +210,7 @@ class MainViewModel(
                     if (parsed == null) {
                         _siteState.value = _siteState.value.copy(
                             isSubmitting = false,
-                            error = "Gemma local no disponible — usá conexión a servidor.",
+                            error = "Local Gemma unavailable — use server connection.",
                         )
                     } else {
                         val envelope = ReportEnvelope(
@@ -171,13 +236,13 @@ class MainViewModel(
                         _siteState.value = _siteState.value.copy(
                             isSubmitting = false,
                             reportResult = envelope,
-                            message = "Reporte estructurado localmente con Gemma.",
+                            message = "Report structured locally with Gemma.",
                         )
                     }
                 }.onFailure { error ->
                     _siteState.value = _siteState.value.copy(
                         isSubmitting = false,
-                        error = "Gemma local no disponible — usá conexión a servidor.",
+                        error = "Local Gemma unavailable — use server connection.",
                     )
                 }
                 return@launch
@@ -188,7 +253,7 @@ class MainViewModel(
                 _siteState.value = _siteState.value.copy(
                     isSubmitting = false,
                     reportResult = envelope,
-                    message = if (envelope == null) "Reporte guardado offline." else "Reporte enviado al backend.",
+                    message = if (envelope == null) "Report saved offline." else "Report sent to backend.",
                 )
                 refreshDashboard()
             }.onFailure { error ->
@@ -205,7 +270,7 @@ class MainViewModel(
                     _siteState.value = _siteState.value.copy(
                         calibration = calibration,
                         isSubmitting = false,
-                        message = "Calibracion guardada.",
+                        message = "Calibration saved.",
                     )
                     onDone()
                 }
@@ -218,7 +283,7 @@ class MainViewModel(
             _dashboard.value = _dashboard.value.copy(isLoading = true, error = null)
             runCatching { repository.flushPendingReports() }
                 .onSuccess {
-                    _siteState.value = _siteState.value.copy(message = "Cola sincronizada.")
+                    _siteState.value = _siteState.value.copy(message = "Queue synced.")
                     refreshDashboard()
                 }
                 .onFailure { error ->

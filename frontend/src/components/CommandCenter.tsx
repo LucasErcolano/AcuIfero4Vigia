@@ -46,9 +46,9 @@ export type Level = FusedAlert['level'];
 // eslint-disable-next-line react-refresh/only-export-components
 export const LEVEL_LABEL: Record<Level, string> = {
   green:  'NOMINAL',
-  yellow: 'VIGILANCIA',
-  orange: 'ADVERTENCIA',
-  red:    'CRÍTICO',
+  yellow: 'WATCH',
+  orange: 'WARNING',
+  red:    'CRITICAL',
 };
 
 // eslint-disable-next-line react-refresh/only-export-components
@@ -81,7 +81,7 @@ export function RiskBanner({ level, score, siteName, region, summary, isDemo }: 
         {level === 'red' ? <TriangleAlert className="w-8 h-8" /> : <Activity className="w-8 h-8" />}
         <div>
           <div className="text-xs font-bold uppercase tracking-widest opacity-80">
-            Incidente activo
+            Active incident
           </div>
           <div className="text-3xl font-bold leading-none mt-1">{LEVEL_LABEL[level]}</div>
         </div>
@@ -90,7 +90,7 @@ export function RiskBanner({ level, score, siteName, region, summary, isDemo }: 
       <div className="border-l border-slate-200 self-stretch opacity-60" />
 
       <div className="min-w-0 flex-1">
-        <div className="text-xs uppercase tracking-wide opacity-70">Sitio</div>
+        <div className="text-xs uppercase tracking-wide opacity-70">Site</div>
         <div className="text-lg font-semibold leading-tight">{siteName}</div>
         {region && <div className="text-xs opacity-80 mt-1">{region}</div>}
       </div>
@@ -128,9 +128,9 @@ export interface SignalInput {
 }
 
 const SIGNAL_META: Record<SignalInput['source'], { label: string; icon: typeof Activity; mono: string }> = {
-  camera:    { label: 'Cámara fija',       icon: Eye,        mono: 'cv_node' },
-  volunteer: { label: 'Reporte voluntario', icon: UserCheck,  mono: 'vol_report' },
-  hydromet:  { label: 'Hidromet',           icon: CloudRain,  mono: 'hydromet' },
+  camera:    { label: 'Fixed camera',      icon: Eye,        mono: 'cv_node' },
+  volunteer: { label: 'Volunteer report',  icon: UserCheck,  mono: 'vol_report' },
+  hydromet:  { label: 'Hydromet',          icon: CloudRain,  mono: 'hydromet' },
 };
 
 const STATUS_DOT: Record<SignalInput['status'], string> = {
@@ -141,9 +141,9 @@ const STATUS_DOT: Record<SignalInput['status'], string> = {
 
 function formatAge(s?: number): string {
   if (s == null) return '—';
-  if (s < 60) return `hace ${s}s`;
-  if (s < 3600) return `hace ${Math.round(s / 60)}m`;
-  return `hace ${Math.round(s / 3600)}h`;
+  if (s < 60) return `${s}s ago`;
+  if (s < 3600) return `${Math.round(s / 60)}m ago`;
+  return `${Math.round(s / 3600)}h ago`;
 }
 
 export function SignalFusionRow({ inputs }: { inputs: SignalInput[] }) {
@@ -203,10 +203,10 @@ export function EvidencePanel({ frameUrl, description, model, confidence }: Evid
     <div className="rounded-lg overflow-hidden border border-slate-800 bg-slate-950 relative">
       <div className="px-4 py-2 bg-slate-900 border-b border-slate-800 flex items-center justify-between">
         <div className="text-xs uppercase tracking-wider text-slate-400 font-semibold">
-          Frame de evidencia
+          Evidence frame
         </div>
         <span className="text-xs font-mono text-slate-500">
-          {frameUrl ? 'cv_node/last_frame.jpg' : 'sample/demo · sin frame real'}
+          {frameUrl ? 'cv_node/last_frame.jpg' : 'sample/demo · no real frame'}
         </span>
       </div>
 
@@ -297,7 +297,7 @@ export function GemmaReasoning({ summary, chain, model }: GemmaReasoningProps) {
     <div className="bg-slate-900 border border-slate-800 rounded-lg p-4">
       <div className="flex items-center justify-between mb-2">
         <div className="text-xs uppercase tracking-wider text-slate-400 font-semibold">
-          Razonamiento de Gemma
+          Gemma reasoning
         </div>
         <span className="text-xs font-mono text-amber-300">{model ?? 'local'}</span>
       </div>
@@ -329,8 +329,8 @@ const OUTCOME_DOT: Record<AuditEntry['outcome'], string> = {
 };
 
 const OUTCOME_LABEL: Record<AuditEntry['outcome'], string> = {
-  fired:     'disparada',
-  not_fired: 'no aplicó',
+  fired:     'fired',
+  not_fired: 'not fired',
   override:  'override',
 };
 
@@ -339,10 +339,10 @@ export function AuditTrace({ entries }: { entries: AuditEntry[] }) {
     <div className="bg-slate-900 border border-slate-800 rounded-lg">
       <div className="px-4 py-3 border-b border-slate-800 flex items-center justify-between">
         <div className="text-xs uppercase tracking-wider text-slate-400 font-semibold">
-          Traza de auditoría determinística
+          Deterministic audit trace
         </div>
         <span className="text-xs font-mono text-slate-500">
-          {entries.filter((e) => e.outcome === 'fired').length} de {entries.length} reglas
+          {entries.filter((e) => e.outcome === 'fired').length} of {entries.length} rules
         </span>
       </div>
       <ol className="divide-y divide-slate-800">
@@ -387,10 +387,10 @@ const ACTION_ICON: Record<ActionCall['fn'], typeof FileText> = {
 };
 
 const ACTION_LABEL_ES: Record<ActionCall['fn'], string> = {
-  emit_cap_xml:         'Emitir CAP v1.2',
-  trigger_siren:        'Disparar sirena',
-  send_lora_alert:      'Enviar alerta LoRa',
-  notify_civil_defense: 'Notificar Defensa Civil',
+  emit_cap_xml:         'Emit CAP v1.2',
+  trigger_siren:        'Trigger siren',
+  send_lora_alert:      'Send LoRa alert',
+  notify_civil_defense: 'Notify Civil Defense',
 };
 
 export function ActionRail({
@@ -404,7 +404,7 @@ export function ActionRail({
     <div className="flex flex-col gap-2">
       <div className="flex items-center justify-between px-1">
         <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold">
-          Acciones del operador
+          Operator actions
         </div>
         <span className="text-xs font-mono text-slate-500">function_call</span>
       </div>
@@ -453,10 +453,10 @@ export function CapStatusCard({
   errorMessage,
 }: CapStatusCardProps) {
   const statusTone: Record<CapStatusCardProps['status'], { dot: string; label: string; color: string }> = {
-    idle:    { dot: 'bg-slate-700', label: 'Sin emitir',  color: 'text-slate-400' },
-    pending: { dot: 'bg-amber-400', label: 'Emitiendo…',  color: 'text-amber-300' },
-    emitted: { dot: 'bg-green-500', label: 'Emitido',     color: 'text-green-300' },
-    error:   { dot: 'bg-red-600',   label: 'Falló',       color: 'text-red-600' },
+    idle:    { dot: 'bg-slate-700', label: 'Not emitted', color: 'text-slate-400' },
+    pending: { dot: 'bg-amber-400', label: 'Emitting…',   color: 'text-amber-300' },
+    emitted: { dot: 'bg-green-500', label: 'Emitted',     color: 'text-green-300' },
+    error:   { dot: 'bg-red-600',   label: 'Failed',      color: 'text-red-600' },
   };
   const tone = statusTone[status];
   return (
@@ -472,7 +472,7 @@ export function CapStatusCard({
       </div>
       <div className="flex flex-col gap-1 text-xs">
         <div className="cc-metric">
-          <span className="cc-k">último emit</span>
+          <span className="cc-k">last emit</span>
           <span className="cc-v">{lastEmit ?? '—'}</span>
         </div>
         <div className="cc-metric">
@@ -480,7 +480,7 @@ export function CapStatusCard({
           <span className="cc-v">{receiptId ?? '—'}</span>
         </div>
         <div className="cc-metric">
-          <span className="cc-k">destinatarios</span>
+          <span className="cc-k">recipients</span>
           <span className="cc-v">{recipientCount}</span>
         </div>
       </div>
@@ -505,7 +505,7 @@ export function OfflineSyncCard({ isOnline, queueCount, lastSync }: OfflineSyncC
     <div className="bg-slate-900 border border-slate-800 rounded-lg p-4">
       <div className="flex items-center justify-between gap-2 mb-3">
         <div className="text-xs uppercase tracking-wider text-slate-400 font-semibold">
-          Cola offline · última sincronización
+          Offline queue · last sync
         </div>
         <div className="flex items-center gap-2">
           {isOnline ? (
@@ -517,7 +517,7 @@ export function OfflineSyncCard({ isOnline, queueCount, lastSync }: OfflineSyncC
       </div>
       <div className="flex items-baseline gap-3">
         <div className="text-4xl font-bold tabular-nums text-white">{queueCount}</div>
-        <div className="text-xs text-slate-400 uppercase tracking-wider">reportes en cola</div>
+        <div className="text-xs text-slate-400 uppercase tracking-wider">reports in queue</div>
       </div>
       <div className="mt-3 text-xs cc-metric">
         <span className="cc-k">last_sync</span>
@@ -551,7 +551,7 @@ const KIND_ICON: Record<TimelineEvent['kind'], typeof Eye> = {
 function fmtTime(iso: string): string {
   try {
     const d = new Date(iso);
-    return d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   } catch {
     return iso;
   }
@@ -562,10 +562,10 @@ export function IncidentTimeline({ events }: { events: TimelineEvent[] }) {
     <div className="bg-slate-900 border border-slate-800 rounded-lg p-4">
       <div className="flex items-center justify-between mb-3">
         <div className="text-xs uppercase tracking-wider text-slate-400 font-semibold">
-          Línea de tiempo del incidente
+          Incident timeline
         </div>
         <span className="text-xs font-mono text-slate-500">
-          {events.filter((e) => e.done).length} / {events.length} eventos
+          {events.filter((e) => e.done).length} / {events.length} events
         </span>
       </div>
       <div className="overflow-x-auto">
@@ -635,12 +635,12 @@ export function NodeProfileCard({
     <div className="bg-slate-900 text-slate-300 border border-slate-800 rounded-lg p-5">
       <div className="flex items-center justify-between gap-3 mb-3">
         <div className="text-xs uppercase tracking-widest text-slate-400 font-bold">
-          Nodo local · perfil
+          Local node · profile
         </div>
         <div className="flex items-center gap-2">
           <span className={`w-2 h-2 rounded-full ${reachable ? 'bg-green-500' : 'bg-red-600'}`} />
           <span className={`text-xs font-semibold uppercase tracking-wider ${reachable ? 'text-green-300' : 'text-red-600'}`}>
-            {reachable ? 'sin cloud · disponible' : 'sin cloud · indisponible'}
+            {reachable ? 'no cloud · available' : 'no cloud · unavailable'}
           </span>
         </div>
       </div>
@@ -653,7 +653,7 @@ export function NodeProfileCard({
           <div className="text-sm font-mono text-slate-200 mt-1">{hardware}</div>
         </div>
         <div>
-          <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold">Modelo</div>
+          <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold">Model</div>
           <div className="text-sm font-mono text-amber-300 mt-1">{model}</div>
         </div>
         <div>
@@ -661,7 +661,7 @@ export function NodeProfileCard({
           <div className="text-sm font-mono text-slate-200 mt-1">{runtime}</div>
         </div>
         <div>
-          <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold">Última corrida</div>
+          <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold">Last run</div>
           <div className="text-sm font-mono text-slate-200 mt-1">
             {lastRunAgoSeconds == null ? '—' : formatAge(lastRunAgoSeconds)}
           </div>
@@ -683,7 +683,7 @@ export interface NodeMetric {
   tone?: 'fired' | 'idle' | 'unmeasured';
 }
 
-export function NodeMetricsCard({ title = 'Métricas del nodo', metrics }: { title?: string; metrics: NodeMetric[] }) {
+export function NodeMetricsCard({ title = 'Node metrics', metrics }: { title?: string; metrics: NodeMetric[] }) {
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-lg">
       <div className="px-4 py-3 border-b border-slate-800 flex items-center justify-between">
@@ -691,7 +691,7 @@ export function NodeMetricsCard({ title = 'Métricas del nodo', metrics }: { tit
           {title}
         </div>
         <span className="text-xs font-mono text-slate-500">
-          {metrics.filter((m) => m.v !== null).length} / {metrics.length} medidos
+          {metrics.filter((m) => m.v !== null).length} / {metrics.length} measured
         </span>
       </div>
       <div className="divide-y divide-slate-800">
@@ -709,7 +709,7 @@ export function NodeMetricsCard({ title = 'Métricas del nodo', metrics }: { tit
                 {m.hint && <span className="text-xs text-slate-500 mt-1">{m.hint}</span>}
               </div>
               <span className={`text-sm font-mono font-semibold tabular-nums ${valueColor}`}>
-                {isMissing ? 'no medido todavía' : m.v}
+                {isMissing ? 'not yet measured' : m.v}
               </span>
             </div>
           );
@@ -724,7 +724,7 @@ export function NodeMetricsCard({ title = 'Métricas del nodo', metrics }: { tit
 // bottom of SiteDetail so the operator + the camera understand the link
 // between the node screen and the fused command center.
 // ──────────────────────────────────────────────────────────────────────────
-export function HandoffNote({ href = '/' , label = 'Resultado fusionado en /comando' }: { href?: string; label?: string }) {
+export function HandoffNote({ href = '/' , label = 'Fused result at /command' }: { href?: string; label?: string }) {
   return (
     <a
       href={href}
@@ -770,13 +770,13 @@ export function EmptyCommandCenter() {
   return (
     <div className="bg-slate-900 text-slate-300 rounded-lg p-10 border border-slate-800 text-center">
       <CheckCircle2 className="w-10 h-10 text-green-400 mx-auto" />
-      <div className="text-lg font-semibold mt-3 text-white">Sin incidente activo</div>
+      <div className="text-lg font-semibold mt-3 text-white">No active incident</div>
       <p className="text-sm text-slate-400 mt-2 leading-snug">
-        El motor de fusión no encontró señales corroboradas que ameriten alertar.
-        Los nodos siguen muestreando; los reportes voluntarios entran en cola si llegan.
+        The fusion engine found no corroborated signals warranting an alert.
+        Nodes keep sampling; volunteer reports queue if they arrive.
       </p>
       <div className="mt-4 inline-flex items-center gap-2 text-xs text-slate-500 font-mono">
-        <CloudRain className="w-3 h-3" /> No CAP emitted in last 24h · hidromet estable
+        <CloudRain className="w-3 h-3" /> No CAP emitted in last 24h · stable hydromet
       </div>
     </div>
   );

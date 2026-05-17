@@ -9,45 +9,45 @@
 # The backend image is built from backend/ using its own pyproject.toml.
 
 services:
-  backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    image: acuifero-vigia-backend:dev
-    container_name: acuifero-backend
-    working_dir: /app
-    environment:
-      PYTHONPATH: src
-      ACUIFERO_DATA_DIR: /data
-      ACUIFERO_LLM_ENABLED: "true"
-      ACUIFERO_LLM_BASE_URL: http://ollama:11434/v1
-      ACUIFERO_LLM_MODEL: gemma4:e2b
-      ACUIFERO_LLM_API_KEY: ollama
-      ACUIFERO_MULTIMODAL_ENABLED: "true"
-      ACUIFERO_MULTIMODAL_BASE_URL: http://ollama:11434/v1
-      ACUIFERO_MULTIMODAL_MODEL: gemma4:e2b
-    volumes:
-      - ./backend:/app
-      - acuifero-data:/data
-    ports:
-      - "8000:8000"
-    command: >
-      uvicorn acuifero_vigia.main:app
-      --host 0.0.0.0 --port 8000 --reload
-    depends_on:
-      - ollama
+    backend:
+        build:
+            context: ./backend
+            dockerfile: Dockerfile
+        image: acuifero-vigia-backend:dev
+        container_name: acuifero-backend
+        working_dir: /app
+        environment:
+            PYTHONPATH: src
+            ACUIFERO_DATA_DIR: /data
+            ACUIFERO_LLM_ENABLED: "true"
+            ACUIFERO_LLM_BASE_URL: http://ollama:11434/v1
+            ACUIFERO_LLM_MODEL: gemma4:e2b
+            ACUIFERO_LLM_API_KEY: ollama
+            ACUIFERO_MULTIMODAL_ENABLED: "true"
+            ACUIFERO_MULTIMODAL_BASE_URL: http://ollama:11434/v1
+            ACUIFERO_MULTIMODAL_MODEL: gemma4:e2b
+        volumes:
+            - ./backend:/app
+            - acuifero-data:/data
+        ports:
+            - "8000:8000"
+        command: >
+            uvicorn acuifero_vigia.main:app
+            --host 0.0.0.0 --port 8000 --reload
+        depends_on:
+            - ollama
 
-  ollama:
-    image: ollama/ollama:latest
-    container_name: acuifero-ollama
-    profiles: ["llm"]
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama-models:/root/.ollama
-    # Pull the model once after first start:
-    #   docker exec acuifero-ollama ollama pull gemma4:e2b
+    ollama:
+        image: ollama/ollama:latest
+        container_name: acuifero-ollama
+        profiles: ["llm"]
+        ports:
+            - "11434:11434"
+        volumes:
+            - ollama-models:/root/.ollama
+        # Pull the model once after first start:
+        #   docker exec acuifero-ollama ollama pull gemma4:e2b
 
 volumes:
-  acuifero-data:
-  ollama-models:
+    acuifero-data:
+    ollama-models:
