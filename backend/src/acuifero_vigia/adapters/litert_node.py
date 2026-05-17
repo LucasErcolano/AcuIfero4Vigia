@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib
 import json
 import logging
+import re
 import threading
 from dataclasses import dataclass
 from pathlib import Path
@@ -244,8 +245,20 @@ class LiteRTNodeRuntime:
                     for part in content
                     if isinstance(part, dict)
                 ).strip()
-                return text or None
-        return str(response).strip() or None
+                return LiteRTNodeRuntime._strip_special_tokens(text) or None
+        return LiteRTNodeRuntime._strip_special_tokens(str(response).strip()) or None
+
+    @staticmethod
+    def _strip_special_tokens(text: str) -> str:
+        if not text:
+            return text
+        cleaned = re.sub(
+            r"<(pad|bos|eos|start_of_turn|end_of_turn|unk|s|/s)>",
+            "",
+            text,
+            flags=re.IGNORECASE,
+        )
+        return cleaned.strip()
 
     @staticmethod
     def _extract_json(raw: str | None) -> dict[str, Any] | None:
