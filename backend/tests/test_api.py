@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timedelta
 from io import BytesIO
 from pathlib import Path
 
@@ -278,3 +279,73 @@ def test_external_snapshot_refresh_serializes_response(monkeypatch: pytest.Monke
     assert payload["site_id"] == "test-site"
     assert payload["signal_score"] == 0.42
     assert payload["summary"] == "rain now 2.0 mm, 12h precip prob 60%"
+
+
+def test_site_experimental_context_and_forecast_endpoints():
+    response = request("PUT", "/api/sites/test-site/experimental-settings", json={
+        "historical_context_enabled": True,
+        "forecast_enabled": True,
+        "forecast_critical_threshold": 0.7,
+    })
+    assert response.status_code == 200
+    assert response.json()["historical_context_enabled"] is True
+
+    response = request("POST", "/api/sites/test-site/historical-context", json={
+        "source": "manual",
+        "title": "Bridge access road",
+        "summary": "At 0.69 the bridge access road floods before the main crossing.",
+        "threshold_level": 0.69,
+        "jurisdiction": "municipal",
+        "source_uri": "manual://bridge-access",
+    })
+    assert response.status_code == 200
+    stored = response.json()["stored"]
+    assert stored["source_uri"] == "manual://bridge-access"
+
+    response = request("GET", "/api/sites/test-site/historical-context?water_level=0.68&query=bridge")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["enabled"] is True
+    assert payload["hits"]
+    assert payload["hits"][0]["id"] == stored["id"]
+
+    now = datetime.utcnow()
+    with Session(edge_engine) as session:
+        session.add(
+            NodeObservation(
+                site_id="test-site",
+                source_type="test",
+                started_at=now - timedelta(minutes=30),
+                ended_at=now - timedelta(minutes=30),
+                frames_analyzed=1,
+                waterline_ratio=0.45,
+                rise_velocity=0.0,
+                crossed_critical_line=False,
+                confidence=0.8,
+                decision_trace="{}",
+                severity_score=0.2,
+            )
+        )
+        session.add(
+            NodeObservation(
+                site_id="test-site",
+                source_type="test",
+                started_at=now,
+                ended_at=now,
+                frames_analyzed=1,
+                waterline_ratio=0.62,
+                rise_velocity=0.0,
+                crossed_critical_line=False,
+                confidence=0.8,
+                decision_trace="{}",
+                severity_score=0.4,
+            )
+        )
+        session.commit()
+
+    response = request("GET", "/api/sites/test-site/forecast")
+    assert response.status_code == 200
+    forecast = response.json()["forecast"]
+    assert forecast["critical_threshold"] == 0.7
+    assert forecast["status"] in {"ok", "degraded"}
+    assert forecast["projected_points"]

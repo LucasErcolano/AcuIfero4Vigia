@@ -17,6 +17,8 @@ from acuifero_vigia.models.domain import (
     VolunteerReport,
 )
 from acuifero_vigia.services.actuators import ACTUATOR_REGISTRY, dispatch_actuators
+from acuifero_vigia.services.historical_context import render_historical_context, retrieve_historical_context
+from acuifero_vigia.services.predictive import Measurement, forecast_short_term
 from acuifero_vigia.services.reasoning import generate_alert_reasoning, serialize_chain
 
 
@@ -451,6 +453,7 @@ def recompute_site_alert(
     *,
     window_minutes: int = DEFAULT_EVIDENCE_WINDOW_MINUTES,
     now: datetime | None = None,
+    use_historical_context: bool = False,
 ) -> FusedAlert:
     now = now or datetime.utcnow()
     events = _collect_evidence(session, site_id, now, window_minutes)
@@ -465,6 +468,16 @@ def recompute_site_alert(
     summary = " | ".join(summary_parts[:3]) or "No recent signals available"
 
     representative = {source: event.payload for source, event in latest_by_source.items()}
+    latest_level = None
+    if "node" in latest_by_source:
+        latest_level = float(latest_by_source["node"].payload.get("waterline_ratio") or 0.0)
+
+    historical_hits = (
+        retrieve_historical_context(site_id, current_level=latest_level)
+        if use_historical_context
+        else []
+    )
+    historical_context = render_historical_context(historical_hits) if historical_hits else None
     reasoning = generate_alert_reasoning(
         level=level,
         fused_score=weighted_score,
@@ -473,10 +486,28 @@ def recompute_site_alert(
         hydromet=representative.get("hydromet"),
         rules_fired=rules_fired,
         llm=llm if level != "green" else None,
+        historical_context=historical_context,
+        historical_hits=historical_hits,
     )
 
     incident = _upsert_incident(session, site_id, level, summary, window_minutes, events, now)
     trace = _event_trace(events, window_minutes, now, rules_fired)
+    node_measurements = [
+        Measurement(
+            observed_at=event.observed_at,
+            water_level=float(event.payload.get("waterline_ratio") or 0.0),
+        )
+        for event in reversed(events)
+        if event.source == "node"
+    ]
+    if node_measurements:
+        trace["forecast"] = forecast_short_term(node_measurements, horizon_minutes=60).__dict__
+    if historical_hits:
+        trace["historical_context"] = {
+            "enabled": True,
+            "mode": "edge-rag-sqlite",
+            "hits": [hit.__dict__ for hit in historical_hits],
+        }
     if incident is not None:
         trace["incident"] = {
             "id": incident.id,

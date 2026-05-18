@@ -12,6 +12,8 @@ import json
 from dataclasses import dataclass, field
 from typing import Any, Optional, Protocol
 
+from acuifero_vigia.services.historical_context import HistoricalContextHit, render_historical_context, validate_context_citations
+
 class TextGenerator(Protocol):
     def generate_text(self, system_prompt: str, user_prompt: str, max_tokens: int = 320) -> str | None: ...
 
@@ -38,6 +40,7 @@ def _render_inputs(
     fused_score: float,
     level: str,
     rules_fired: list[str],
+    historical_context: str | None = None,
 ) -> str:
     parts: list[str] = []
     parts.append(f"level={level} score={fused_score:.2f}")
@@ -69,6 +72,8 @@ def _render_inputs(
         )
     if rules_fired:
         parts.append("rules " + ", ".join(rules_fired[:4]))
+    if historical_context:
+        parts.append(f"historical_context {historical_context[:360]}")
     return "\n".join(parts)
 
 
@@ -129,6 +134,8 @@ def generate_alert_reasoning(
     hydromet: Optional[dict[str, Any]],
     rules_fired: list[str],
     llm: Optional[TextGenerator] = None,
+    historical_context: str | None = None,
+    historical_hits: list[HistoricalContextHit] | None = None,
 ) -> ReasoningBlock:
     """Produce an English reasoning block for an alert.
 
@@ -138,7 +145,7 @@ def generate_alert_reasoning(
     """
     if level == "green":
         return ReasoningBlock(
-            llm_summary="Green level: no risk threshold exceeded. Gemma not invoked.",
+            llm_summary="Green/verde level: no risk threshold exceeded. Gemma not invoked.",
             llm_chain_of_thought=["no signals above threshold"],
             model_name="rule-skip-green",
         )
@@ -146,7 +153,15 @@ def generate_alert_reasoning(
     if llm is None:
         return _fallback(level, rules_fired)
 
-    user_prompt = _render_inputs(node_obs, volunteer_parsed, hydromet, fused_score, level, rules_fired)
+    user_prompt = _render_inputs(
+        node_obs,
+        volunteer_parsed,
+        hydromet,
+        fused_score,
+        level,
+        rules_fired,
+        historical_context,
+    )
     raw = llm.generate_text(SYSTEM_PROMPT, user_prompt, max_tokens=192)
     if not raw:
         return _fallback(level, rules_fired)
@@ -154,6 +169,13 @@ def generate_alert_reasoning(
     summary, chain = _parse_llm_output(raw)
     if not summary:
         return _fallback(level, rules_fired)
+
+    if historical_hits and not validate_context_citations(summary, historical_hits):
+        summary = summary.split("[ctx:", 1)[0].strip()
+    if historical_hits:
+        summary = f"{summary} Historical context: {render_historical_context(historical_hits)[:220]}"
+    elif historical_context:
+        summary = f"{summary} Historical context: {historical_context[:180]}"
 
     return ReasoningBlock(
         llm_summary=summary,

@@ -123,4 +123,90 @@ describe('AppStore', () => {
     expect((audioEntry as File).type).toBe('audio/webm');
     expect(idb.deleteReportOffline).toHaveBeenCalledWith(7);
   });
+
+  it('fetches and updates per-site experimental settings', async () => {
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          site_id: 'test-site',
+          historical_context_enabled: false,
+          forecast_enabled: true,
+          forecast_horizon_minutes: 60,
+          forecast_critical_threshold: 0.8,
+          updated_at: '2026-05-18T10:00:00',
+        }),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          site_id: 'test-site',
+          historical_context_enabled: true,
+          forecast_enabled: true,
+          forecast_horizon_minutes: 60,
+          forecast_critical_threshold: 0.8,
+          updated_at: '2026-05-18T10:01:00',
+        }),
+      } as Response);
+
+    await useAppStore.getState().fetchSiteExperimentalSettings('test-site');
+    expect(fetchMock.mock.calls[0][0]).toContain('/api/sites/test-site/experimental-settings');
+    expect(useAppStore.getState().siteSettings['test-site'].historical_context_enabled).toBe(false);
+
+    await useAppStore.getState().updateSiteExperimentalSettings('test-site', {
+      historical_context_enabled: true,
+    });
+    expect(fetchMock.mock.calls[1][1]?.method).toBe('PUT');
+    expect(useAppStore.getState().siteSettings['test-site'].historical_context_enabled).toBe(true);
+  });
+
+  it('fetches historical context and forecast for a site', async () => {
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          hits: [
+            {
+              id: 3,
+              source: 'manual',
+              title: 'Bridge threshold',
+              summary: 'Close access road at 0.7.',
+              threshold_level: 0.7,
+              jurisdiction: 'municipal',
+              rank: 0.91,
+            },
+          ],
+        }),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          forecast: {
+            horizon_minutes: 60,
+            expected_level: 0.82,
+            trend_per_hour: 0.2,
+            acceleration_per_hour2: 0.01,
+            risk: 'high',
+            status: 'ok',
+            confidence: 0.7,
+            critical_threshold: 0.8,
+            minutes_to_threshold: 48,
+            projected_points: [{ minute: 0, level: 0.6 }, { minute: 60, level: 0.82 }],
+            uncertainty_band: [{ minute: 0, low: 0.6, high: 0.6 }, { minute: 60, low: 0.76, high: 0.88 }],
+          },
+        }),
+      } as Response);
+
+    const hits = await useAppStore.getState().fetchSiteHistoricalContext('test-site', {
+      waterLevel: 0.68,
+      query: 'bridge',
+    });
+    expect(hits[0].id).toBe(3);
+    expect(String(fetchMock.mock.calls[0][0])).toContain('water_level=0.68');
+    expect(useAppStore.getState().siteHistoricalContext['test-site'][0].rank).toBe(0.91);
+
+    const forecast = await useAppStore.getState().fetchSiteForecast('test-site');
+    expect(forecast?.expected_level).toBe(0.82);
+    expect(useAppStore.getState().siteForecasts['test-site'].minutes_to_threshold).toBe(48);
+  });
 });

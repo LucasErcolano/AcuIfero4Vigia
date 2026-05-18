@@ -51,6 +51,43 @@ export interface SyncStatus {
   failed: number;
 }
 
+export interface SiteExperimentalSettings {
+  site_id: string;
+  historical_context_enabled: boolean;
+  forecast_enabled: boolean;
+  forecast_horizon_minutes: number;
+  forecast_critical_threshold: number;
+  updated_at: string;
+}
+
+export interface HistoricalContextHit {
+  id: number;
+  source: string;
+  title: string;
+  summary: string;
+  threshold_level?: number | null;
+  jurisdiction?: string | null;
+  effective_from?: string | null;
+  effective_to?: string | null;
+  source_uri?: string | null;
+  rank: number;
+}
+
+export interface SiteForecast {
+  horizon_minutes: number;
+  expected_level: number;
+  trend_per_hour: number;
+  acceleration_per_hour2: number;
+  risk: string;
+  status: string;
+  confidence: number;
+  critical_threshold: number;
+  minutes_to_threshold?: number | null;
+  projected_points: Array<{ minute: number; level: number }>;
+  uncertainty_band: Array<{ minute: number; low: number; high: number }>;
+  warning?: string | null;
+}
+
 export interface CapEmitRequest {
   site_id?: string;
   lat?: number;
@@ -68,9 +105,16 @@ interface AppState {
   alerts: FusedAlert[];
   queueCount: number;
   syncStatus: SyncStatus | null;
+  siteSettings: Record<string, SiteExperimentalSettings>;
+  siteForecasts: Record<string, SiteForecast>;
+  siteHistoricalContext: Record<string, HistoricalContextHit[]>;
   setOnline: (status: boolean) => void;
   fetchSites: () => Promise<void>;
-  fetchAlerts: () => Promise<void>;
+  fetchAlerts: (options?: { historicalContext?: boolean }) => Promise<void>;
+  fetchSiteExperimentalSettings: (siteId: string) => Promise<SiteExperimentalSettings | null>;
+  updateSiteExperimentalSettings: (siteId: string, payload: Partial<SiteExperimentalSettings>) => Promise<SiteExperimentalSettings | null>;
+  fetchSiteHistoricalContext: (siteId: string, options?: { waterLevel?: number; query?: string }) => Promise<HistoricalContextHit[]>;
+  fetchSiteForecast: (siteId: string) => Promise<SiteForecast | null>;
   checkConnectivity: () => Promise<void>;
   updateQueueCount: () => Promise<void>;
   flushQueue: () => Promise<void>;
@@ -84,6 +128,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   alerts: [],
   queueCount: 0,
   syncStatus: null,
+  siteSettings: {},
+  siteForecasts: {},
+  siteHistoricalContext: {},
 
   setOnline: (status) => set({ isOnline: status }),
 
@@ -99,15 +146,78 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
 
-  fetchAlerts: async () => {
+  fetchAlerts: async (options) => {
     try {
-      const res = await fetch(`${API_BASE}/alerts`);
+      const query = options?.historicalContext ? '?historical_context=true' : '';
+      const res = await fetch(`${API_BASE}/alerts${query}`);
       if (res.ok) {
         const data = await res.json();
         set({ alerts: data });
       }
     } catch (err) {
       console.error('Failed to fetch alerts', err);
+    }
+  },
+
+  fetchSiteExperimentalSettings: async (siteId) => {
+    try {
+      const res = await fetch(`${API_BASE}/sites/${encodeURIComponent(siteId)}/experimental-settings`);
+      if (!res.ok) return null;
+      const data = (await res.json()) as SiteExperimentalSettings;
+      set((state) => ({ siteSettings: { ...state.siteSettings, [siteId]: data } }));
+      return data;
+    } catch (err) {
+      console.error('Failed to fetch site experimental settings', err);
+      return null;
+    }
+  },
+
+  updateSiteExperimentalSettings: async (siteId, payload) => {
+    try {
+      const res = await fetch(`${API_BASE}/sites/${encodeURIComponent(siteId)}/experimental-settings`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) return null;
+      const data = (await res.json()) as SiteExperimentalSettings;
+      set((state) => ({ siteSettings: { ...state.siteSettings, [siteId]: data } }));
+      return data;
+    } catch (err) {
+      console.error('Failed to update site experimental settings', err);
+      return null;
+    }
+  },
+
+  fetchSiteHistoricalContext: async (siteId, options) => {
+    try {
+      const params = new URLSearchParams();
+      if (typeof options?.waterLevel === 'number') params.set('water_level', String(options.waterLevel));
+      if (options?.query) params.set('query', options.query);
+      const qs = params.toString();
+      const res = await fetch(`${API_BASE}/sites/${encodeURIComponent(siteId)}/historical-context${qs ? `?${qs}` : ''}`);
+      if (!res.ok) return [];
+      const data = await res.json();
+      const hits = Array.isArray(data.hits) ? data.hits as HistoricalContextHit[] : [];
+      set((state) => ({ siteHistoricalContext: { ...state.siteHistoricalContext, [siteId]: hits } }));
+      return hits;
+    } catch (err) {
+      console.error('Failed to fetch site historical context', err);
+      return [];
+    }
+  },
+
+  fetchSiteForecast: async (siteId) => {
+    try {
+      const res = await fetch(`${API_BASE}/sites/${encodeURIComponent(siteId)}/forecast`);
+      if (!res.ok) return null;
+      const data = await res.json();
+      const forecast = data.forecast as SiteForecast;
+      set((state) => ({ siteForecasts: { ...state.siteForecasts, [siteId]: forecast } }));
+      return forecast;
+    } catch (err) {
+      console.error('Failed to fetch site forecast', err);
+      return null;
     }
   },
 

@@ -29,6 +29,15 @@ class SiteCalibration(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
+class SiteExperimentalSettings(SQLModel, table=True):
+    site_id: str = Field(primary_key=True)
+    historical_context_enabled: bool = False
+    forecast_enabled: bool = True
+    forecast_horizon_minutes: int = 60
+    forecast_critical_threshold: float = 0.8
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
 class NodeObservation(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     site_id: str = Field(index=True)
