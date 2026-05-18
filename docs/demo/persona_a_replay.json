@@ -1,0 +1,50 @@
+{
+  "mode": "replay",
+  "source_note": "Replay fixture for Persona A when the Raspberry Pi backend is not currently running. Values are constrained to the documented Pi 5 E2B profile and the Acto 2 demo payload is kept separate from Silverado analysis.",
+  "runtime": {
+    "provider": "litert",
+    "backend": "gpu",
+    "multimodal_backend": "cpu",
+    "vision_backend": "cpu",
+    "speculative_decoding": true,
+    "model": "gemma-4-E2B-it.litertlm",
+    "node_profile": "raspberry-pi-8gb-multimodal-demo",
+    "p1_runtime_ready": true
+  },
+  "firewall": {
+    "cv_backend": "pil-pure-python",
+    "waterline_ratio": 0.1458,
+    "rise_velocity": -0.0405,
+    "water_level": "low",
+    "crossed_critical_line": false,
+    "confidence": 1.0
+  },
+  "sample_analysis": {
+    "endpoint": "/api/sites/silverado-fixed-cam-usgs/sample-node-analysis",
+    "source": "replay: documented Pi/backend sample-node-analysis evidence",
+    "runner_mode": "litert-multimodal-temporal",
+    "assessment_mode": "gemma4-multimodal-v1",
+    "frames_analyzed": 1,
+    "assessment_level": "green",
+    "alert_level": "green"
+  },
+  "acto_2_payload": {
+    "source": "Acto 2 demo payload",
+    "script": "scripts/demo_persona_c/02_acuifero_amarillo.sh",
+    "waterline_ratio": 0.62,
+    "rise_velocity": 0.05,
+    "water_level": "elevated",
+    "crossed_critical_line": false,
+    "confidence": 0.81,
+    "cam_score": 52,
+    "severity_score": 0.52,
+    "dashboard_state": "VIGILANCIA",
+    "claim_boundary": "synchronized Persona C payload, not Silverado sample output"
+  },
+  "benchmark_overlay": {
+    "hardware": "Raspberry Pi 5 8GB",
+    "runtime": "LiteRT-LM",
+    "compute": "text GPU + image CPU/CPU",
+    "rss_peak_note": "benchmark-card: E2B image RSS peak 2604.3 MB; text/reasoning fresh-runtime peaks up to 3582.2 MB"
+  }
+}
