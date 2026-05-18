@@ -12,7 +12,7 @@ Good Hackathon (Global Resilience track, LiteRT Prize).
 3. **Rich audit pack for demos and review**: each node analysis persists curated frames, evidence imagery, runner metadata, fallback status, and JSON artifacts instead of only a heuristic score.
 4. **Rioplatense hydro understanding**: 82-example labeled corpus + 12-shot prompt beats rule-based baseline on Litoral colloquial phrases. See [`docs/hackathon/rioplatense_eval.md`](docs/hackathon/rioplatense_eval.md).
 5. **SINAGIR-ready export**: `POST /api/alerts/{id}/export-sinagir` emits a documented schema mapped to Argentina's national disaster registry. See [`docs/hackathon/sinagir-mapping.md`](docs/hackathon/sinagir-mapping.md).
-6. **On-device Android volunteer flow**: MediaPipe LLM Inference wrapper parses reports fully on-device (no silent backend fallback). See [`docs/hackathon/android_gemma.md`](docs/hackathon/android_gemma.md).
+6. **On-device Android volunteer flow**: LiteRT-LM Android wrapper parses reports fully on-device using the same `.litertlm` artifact as the backend (no silent backend fallback). See [`docs/hackathon/android_gemma.md`](docs/hackathon/android_gemma.md).
 
 Connectivity-loss demo: [`scripts/demo_connectivity.py`](scripts/demo_connectivity.py) runs the full `wifi-off -> local alert -> siren -> wifi-on -> queue drain` narrative in under 90 s.
 
@@ -24,7 +24,7 @@ Gemma 4 is used in three places (full map: [`docs/GEMMA_USAGE.md`](docs/GEMMA_US
 2. Vigia report understanding - [`backend/src/acuifero_vigia/adapters/text_structuring_gemma_fewshot.py`](backend/src/acuifero_vigia/adapters/text_structuring_gemma_fewshot.py), on-device Android [`android/app/src/main/java/com/acuifero/vigia/android/data/GemmaOnDevice.kt`](android/app/src/main/java/com/acuifero/vigia/android/data/GemmaOnDevice.kt)
 3. Alert reasoning + audit trace - [`backend/src/acuifero_vigia/services/reasoning.py`](backend/src/acuifero_vigia/services/reasoning.py), [`backend/src/acuifero_vigia/services/node_analysis.py`](backend/src/acuifero_vigia/services/node_analysis.py)
 
-Runtimes: Ollama (backend dev / Pi 16GB), LiteRT-LM (Pi 8GB target, benchmarks in [`docs/hackathon/`](docs/hackathon/)), MediaPipe LLM Inference (Android).
+Runtimes: Ollama (backend dev / Pi 16GB), LiteRT-LM (Pi 8GB target, benchmarks in [`docs/hackathon/`](docs/hackathon/)), LiteRT-LM Android (volunteer app).
 
 Reproducibility (versions, commands, expected outputs, anti-mock checks): [`docs/REPRODUCIBILITY.md`](docs/REPRODUCIBILITY.md). Hardware deployment: [`docs/raspberry-pi-acuifero-node.md`](docs/raspberry-pi-acuifero-node.md).
 
@@ -33,7 +33,7 @@ Reproducibility (versions, commands, expected outputs, anti-mock checks): [`docs
 ```
 backend/    FastAPI service (Python 3.10+, uv): node analysis, alerts, sync
 frontend/   PWA dashboard (Vite + TS): operator UI for sites and queue
-android/    Volunteer Android app (Compose + MediaPipe LLM Inference)
+android/    Volunteer Android app (Compose + LiteRT-LM Android)
 scripts/    Pi node runners, demo, setup, dev, fetch assets
 shared/     Cross-component JSON schemas
 fixtures/   Demo media/frames (gitignored, fetched on demand)
@@ -62,8 +62,8 @@ docker-compose.yml  Dev orchestration for backend + optional Ollama
                                                           +-------------+
 ```
 
-Stack: Gemma 4 (E2B/E4B) via Ollama and MediaPipe LLM Inference, LiteRT-LM
-(stub runner target), FastAPI, SQLite, React/Vite PWA, Jetpack Compose, CAP v1.2.
+Stack: Gemma 4 (E2B/E4B/26B-A4B) via Ollama (central server) and LiteRT-LM
+(Pi node + Android app), FastAPI, SQLite, React/Vite PWA, Jetpack Compose, CAP v1.2.
 
 ## Quick start (Docker)
 

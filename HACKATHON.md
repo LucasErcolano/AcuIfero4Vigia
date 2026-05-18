@@ -58,9 +58,12 @@ Proof: [`docs/hackathon/sinagir-mapping.md`](docs/hackathon/sinagir-mapping.md).
 
 ### 7. On-device Android path
 
-`android/.../data/GemmaOnDevice.kt` wraps MediaPipe LLM Inference for Gemma
-`.task` files. Volunteer report structuring runs fully on-device with no
-silent backend fallback.
+`android/.../data/GemmaOnDevice.kt` wraps LiteRT-LM Android
+(`com.google.ai.edge.litertlm:litertlm-android`) and loads
+`gemma-4-E2B-it.litertlm` — the same artifact the backend uses.
+Volunteer report structuring runs fully on-device with no silent
+backend fallback. MediaPipe `.task` was the original plan; Google has
+not shipped a Gemma 4 `.task`, so the Android tier moved to LiteRT-LM.
 
 Proof: [`docs/hackathon/android_gemma.md`](docs/hackathon/android_gemma.md).
 

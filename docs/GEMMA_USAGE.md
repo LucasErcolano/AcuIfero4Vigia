@@ -7,7 +7,7 @@ Concrete map of where Gemma 4 runs in this repo, which runtime is used, and how 
 | Tier | Variant | Where | Runtime | Notes |
 |---|---|---|---|---|
 | Acuifero Pi node | `google/gemma-4-E4B-it` | LiteRT artifact on Pi 16GB / workstation | LiteRT-LM | Multimodal temporal assessment |
-| Vigia Android | `google/gemma-4-E2B-it` | `gemma-4-E2B-it.litertlm` in app `filesDir` | LiteRT (MediaPipe LLM Inference wrapper) | Text + audio transcript fusion |
+| Vigia Android | `google/gemma-4-E2B-it` | `gemma-4-E2B-it.litertlm` in app `filesDir` | LiteRT-LM Android (`com.google.ai.edge.litertlm:litertlm-android`) | Text + audio transcript fusion |
 | Central server | `gemma4:26b` (Ollama tag for 26B-A4B q4_K_M) | Backend docker / workstation | Ollama | Vision + tools, alert reasoning + actuator dispatch |
 | (local light dev) | `gemma4:e2b` | Local Ollama, text-only experiments | Ollama | Text-only; rejects `/api/chat` tools |
 
@@ -31,7 +31,7 @@ The full hardware × tier matrix and quantization choices are in [`demo-artifact
 - Files:
   - [`backend/src/acuifero_vigia/adapters/text_structuring_gemma_fewshot.py`](../backend/src/acuifero_vigia/adapters/text_structuring_gemma_fewshot.py)
   - [`backend/src/acuifero_vigia/services/report_structuring.py`](../backend/src/acuifero_vigia/services/report_structuring.py)
-  - Android on-device path: [`android/app/src/main/java/com/acuifero/vigia/android/data/GemmaOnDevice.kt`](../android/app/src/main/java/com/acuifero/vigia/android/data/GemmaOnDevice.kt) (MediaPipe LLM Inference, no backend fallback).
+  - Android on-device path: [`android/app/src/main/java/com/acuifero/vigia/android/data/GemmaOnDevice.kt`](../android/app/src/main/java/com/acuifero/vigia/android/data/GemmaOnDevice.kt) (LiteRT-LM Android, no backend fallback).
 
 ### 3. Alert reasoning / audit trace
 - Generates Spanish reasoning block for every non-green fused alert.
@@ -44,7 +44,7 @@ The full hardware × tier matrix and quantization choices are in [`demo-artifact
 
 - **Ollama** for backend dev: simple model pull, multimodal in one process, matches Pi 16GB / workstation profile.
 - **LiteRT-LM** target for the Pi 8GB demo profile: smaller footprint, on-device decode benchmarks live in [`docs/hackathon/`](hackathon/) (`litert-e2b-pi5-8gb-*.jsonl`). Runner stub: [`scripts/litert_benchmark.py`](../scripts/litert_benchmark.py), [`scripts/litert_smoke.py`](../scripts/litert_smoke.py).
-- **MediaPipe LLM Inference** on Android: official Gemma path for on-device mobile, no silent network fallback (see [`android_gemma.md`](hackathon/android_gemma.md)).
+- **LiteRT-LM Android** on Android: same `.litertlm` artifact as the backend, no silent network fallback (see [`android_gemma.md`](hackathon/android_gemma.md)). MediaPipe `tasks-genai` was the original plan but Google has not published a Gemma 4 `.task` file.
 
 ## Prompt / schema
 

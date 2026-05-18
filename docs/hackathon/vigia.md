@@ -57,7 +57,7 @@ Routing entry point: `backend/src/acuifero_vigia/api/routers/vigia.py`.
 |---|---|---|
 | `"rules"` | `services/report_structuring._fallback_parse` | Deterministic keyword parser. Used when the LLM is unreachable or returns unparseable JSON. Always available. |
 | `"llm"` | `services/report_structuring._normalize_llm_payload` | Gemma 4 via Ollama on the backend host (`GemmaFewShotTextStructurer` with the rioplatense few-shot corpus). Default when Ollama is reachable. |
-| `"gemma-android"` | `ui/MainViewModel.submitReport` (Android) | Gemma 4 running on-device via MediaPipe LLM Inference. Set when the `.task` asset is present and `structureReport` returned valid JSON. No silent fallback to the backend on failure — the operator sees the error and can retry. |
+| `"gemma-android"` | `ui/MainViewModel.submitReport` (Android) | Gemma 4 running on-device via LiteRT-LM Android. Set when `gemma-4-E2B-it.litertlm` is present in `context.filesDir` and `structureReport` returned valid JSON. No silent fallback to the backend on failure — the operator sees the error and can retry. |
 
 The Android UI surfaces this field as a small chip next to the parsed observation, with Spanish labels chosen so a volunteer in the field can reason about provenance without reading logs:
 
@@ -94,7 +94,7 @@ Demo machines with GPU acceleration (the production target via MediaPipe on Andr
 ## 6. Known gaps and out-of-scope items
 
 - Native photo and audio capture inside the Android UI is NOT implemented in this PR. The device-capture path requires CameraX plus `MediaRecorder` wiring and was deferred because no physical device or emulator was available in this session. The PWA covers the demo path; Android currently exercises the on-device structuring layer against typed transcripts.
-- The `.task` asset (gemma4-e2b for MediaPipe, ~1.4 GB) is NOT bundled in the APK and is NOT auto-downloaded. The `GemmaOnDevice` wrapper expects it at `context.filesDir/gemma4-e2b.task`; the dev or operator places it there manually for now.
+- The `.litertlm` asset (`gemma-4-E2B-it.litertlm` for LiteRT-LM, ~1.4 GB) is NOT bundled in the APK and is NOT auto-downloaded. The `GemmaOnDevice` wrapper expects it at `context.filesDir/gemma-4-E2B-it.litertlm`; the dev or operator places it there manually (see [`docs/hackathon/android_gemma.md`](android_gemma.md) "Build & run" for the adb-push flow). MediaPipe `.task` was the original plan but Google has not shipped a Gemma 4 `.task` file, so the Android tier moved to LiteRT-LM — same artifact the backend uses.
 - Android unit tests under `app/src/test/` are written but require an Android
   SDK. Run `./gradlew :app:testDebugUnitTest` in an Android-capable checkout.
 - Real-device benchmarks for on-device Gemma latency are pending. The numbers in `docs/hackathon/android_gemma.md` are still projections.
