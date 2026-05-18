@@ -16,6 +16,18 @@ Good Hackathon (Global Resilience track, LiteRT Prize).
 
 Connectivity-loss demo: [`scripts/demo_connectivity.py`](scripts/demo_connectivity.py) runs the full `wifi-off -> local alert -> siren -> wifi-on -> queue drain` narrative in under 90 s.
 
+## Where Gemma 4 is used
+
+Gemma 4 is used in three places (full map: [`docs/GEMMA_USAGE.md`](docs/GEMMA_USAGE.md)):
+
+1. Edge node temporal reasoning - [`backend/src/acuifero_vigia/services/acuifero_assessment.py`](backend/src/acuifero_vigia/services/acuifero_assessment.py), [`backend/src/acuifero_vigia/adapters/video_assessment.py`](backend/src/acuifero_vigia/adapters/video_assessment.py), [`backend/src/acuifero_vigia/adapters/llm.py`](backend/src/acuifero_vigia/adapters/llm.py)
+2. Vigia report understanding - [`backend/src/acuifero_vigia/adapters/text_structuring_gemma_fewshot.py`](backend/src/acuifero_vigia/adapters/text_structuring_gemma_fewshot.py), on-device Android [`android/app/src/main/java/com/acuifero/vigia/android/data/GemmaOnDevice.kt`](android/app/src/main/java/com/acuifero/vigia/android/data/GemmaOnDevice.kt)
+3. Alert reasoning + audit trace - [`backend/src/acuifero_vigia/services/reasoning.py`](backend/src/acuifero_vigia/services/reasoning.py), [`backend/src/acuifero_vigia/services/node_analysis.py`](backend/src/acuifero_vigia/services/node_analysis.py)
+
+Runtimes: Ollama (backend dev / Pi 16GB), LiteRT-LM (Pi 8GB target, benchmarks in [`docs/hackathon/`](docs/hackathon/)), MediaPipe LLM Inference (Android).
+
+Reproducibility (versions, commands, expected outputs, anti-mock checks): [`docs/REPRODUCIBILITY.md`](docs/REPRODUCIBILITY.md). Hardware deployment: [`docs/raspberry-pi-acuifero-node.md`](docs/raspberry-pi-acuifero-node.md).
+
 ## Repository layout
 
 ```
