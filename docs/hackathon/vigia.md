@@ -125,7 +125,6 @@ Demo machines with GPU acceleration (the production target via MediaPipe on Andr
 ## 8. References
 
 - `docs/architecture.md` — shared backend architecture across Acuífero and Vigía.
-- `docs/hackathon/recon.md` — how the Vigía gap surfaced during P0 recon.
 - `docs/hackathon/rioplatense_eval.md` — the few-shot corpus and structuring benchmark.
 - `docs/hackathon/android_gemma.md` — the on-device path (this PR wires it; that doc still carries projected, not measured, latencies).
 - `MAIN_IDEA.md` — product brief.

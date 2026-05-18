@@ -9,7 +9,6 @@ Owns the whole video pipeline and final submission readiness.
 - `../shot_list.md`
 - `../edit/edl.json`
 - `../claims_guardrail.md`
-- `../../persona_d_e_pendiente.md`
 
 ## Responsibilities
 
@@ -29,4 +28,4 @@ Owns the whole video pipeline and final submission readiness.
 
 - Every block has a primary asset or explicit fallback.
 - All credits and disclaimers are represented in the edit.
-- Submit checklist in `../../persona_d_e_pendiente.md` is complete or has an honest blocker note.
+- Submission checklist (assets present, claims cleared, credits attached) is complete or has an honest blocker note.

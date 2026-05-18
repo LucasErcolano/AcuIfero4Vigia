@@ -232,8 +232,7 @@ banner-color-change frames.
 - Action rail buttons. The four operator buttons (Emitir CAP / Sirena / LoRa /
   Defensa Civil) are pure UI in the current commit — they log to a stdout
   panel and push to the local timeline state, but they don't hit the backend.
-  Wiring them to `/api/alerts/{id}/export-sinagir` etc. is documented in
-  `DEMO_RECORDING_PERSONA_C.md` section 3 as a known follow-up.
+  Wiring them to `/api/alerts/{id}/export-sinagir` etc. is a known follow-up.
 
 ## Outputs (in `outputs/`)
 
