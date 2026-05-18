@@ -75,6 +75,14 @@ fixtures/frames/
 outputs/
 screenshots/
 datasets/raw/
+.scratch/
+/critical.png
+/nominal.png
+/watch.png
+
+# --- Demo artifacts: keep source tree, ignore generated zips/checksums ---
+demo-artifacts/acuifero-vigia-demo-artifacts.zip
+demo-artifacts/SHA256SUMS.txt
 
 # --- OS / editors ---
 .codex

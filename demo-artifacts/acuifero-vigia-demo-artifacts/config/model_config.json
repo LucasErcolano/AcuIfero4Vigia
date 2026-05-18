@@ -1,0 +1,38 @@
+{
+  "model": {
+    "name": "google/gemma-3-4b-it",
+    "family": "Gemma 4",
+    "size_params_b": 4,
+    "weights_bundled": false,
+    "weights_source": "https://huggingface.co/google/gemma-3-4b-it",
+    "license": "Gemma Terms of Use",
+    "fine_tuned": false,
+    "adapters": []
+  },
+  "runtimes": [
+    {
+      "name": "LiteRT",
+      "target": "raspberry_pi_4_8gb",
+      "quantization": "int4",
+      "config_path": "config/lite_rt_config.json"
+    },
+    {
+      "name": "Ollama",
+      "target": "raspberry_pi_5_8gb",
+      "quantization": "q4_K_M"
+    },
+    {
+      "name": "llama.cpp",
+      "target": "x86_dev_host",
+      "quantization": "q5_K_M"
+    }
+  ],
+  "modalities": ["text", "image", "audio_transcript"],
+  "context_window_tokens": 8192,
+  "decoding": {
+    "temperature": 0.2,
+    "top_p": 0.9,
+    "max_new_tokens": 512,
+    "json_mode": true
+  }
+}
