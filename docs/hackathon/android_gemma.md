@@ -4,36 +4,36 @@
 
 Confirmed by P0 recon: Kotlin + Jetpack Compose, `compileSdk=34`, `minSdk=26`,
 Retrofit for backend API, Room for offline queue. Gemma runtime is added via
-**MediaPipe LLM Inference** (`com.google.mediapipe:tasks-genai`) — the Kotlin
-API that ships Gemma as `.task` files with GPU/NNAPI acceleration.
+**LiteRT-LM Android** (`com.google.ai.edge.litertlm:litertlm-android`) — the
+native Android binding for the same `.litertlm` artifact the backend loads on
+the Pi/workstation tier.
 
 Alternatives considered:
 
-- **LiteRT-LM** — newer; Kotlin bindings still maturing, picked MediaPipe for stability.
-- **llama.cpp via JNI** — works with `.gguf` but requires ABI-specific native builds. Deferred.
+- **MediaPipe LLM Inference** (`com.google.mediapipe:tasks-genai`) — was the
+  original plan, but Google has not published a Gemma 4 `.task` file. The
+  format only exists for Gemma 3 / 3n, so the `tasks-genai` path was unusable
+  for the hackathon target model. Dropped.
+- **llama.cpp via JNI** — works with `.gguf` but requires ABI-specific native
+  builds and an extra conversion. Deferred.
 
 ## Files added
 
 - `android/app/src/main/java/com/acuifero/vigia/android/data/GemmaOnDevice.kt`
-  — thin wrapper over `LlmInference`. Loaded reflectively so the module
-  compiles in environments without Google Maven access; runtime-activates
-  when the dependency is present.
-- `android/app/build.gradle.kts` — `com.google.mediapipe:tasks-genai:0.10.14`
-  declared but commented out. Uncomment after bundling a real `.task` asset.
+  — thin wrapper over LiteRT-LM `Engine` / `Conversation`. Single-source model
+  path (`gemma-4-E2B-it.litertlm`) shared with the backend.
+- `android/app/build.gradle.kts` — `com.google.ai.edge.litertlm:litertlm-android:0.11.0`
+  declared as a real dependency (no reflective load: the runtime is required).
 
 ## Model choice
 
-`gemma4-e2b.task` (Q4 weights, ~1.4 GB). E4B exceeds comfort on mid-range
-Android (Snapdragon 7-gen), so E2B is the production target. E4B can be
-a stretch profile for flagships; same `GemmaOnDevice` code path works.
+`gemma-4-E2B-it.litertlm` (int4, ~1.4 GB). E4B exceeds comfort on mid-range
+Android (Snapdragon 7-gen), so E2B is the production target. E4B can be a
+stretch profile for flagships; the same `GemmaOnDevice` code path works as
+long as the artifact name and `MODEL_FILE_NAME` are updated.
 
-Download-on-first-launch flow (not bundled in APK — APK stays <50 MB):
-
-```
-GET https://your-cdn/gemma4-e2b.task  →  context.filesDir/gemma4-e2b.task
-```
-
-Verified via SHA-256 checksum stored alongside.
+The artifact is NOT bundled in the APK (keeps APK <50 MB). It is placed at
+runtime — see "Build & run" below.
 
 ## Volunteer report flow
 
@@ -49,11 +49,13 @@ Verified via SHA-256 checksum stored alongside.
 
 ## Latency budget
 
-Target: **<12 s** combined text+image on mid-range device. Expected profile:
+Target: **<12 s** combined text+image on mid-range device. Expected profile
+(projections from public LiteRT-LM E2B benchmarks, not measurements on the APK
+— see "Limitations" below):
 
 | Phase | Mid-range (Snapdragon 7-gen, 8GB) | Flagship (SD 8-gen) |
 |---|---|---|
-| Cold load `.task` → VRAM | 3.8 s | 1.9 s |
+| Cold load `.litertlm` → engine ready | 3.8 s | 1.9 s |
 | Text structure (220 tokens, E2B) | 4.2 s | 1.6 s |
 | Image assessment (frame, E2B) | 5.8 s | 2.3 s |
 
@@ -62,20 +64,48 @@ backend sync in that case.
 
 ## Build & run
 
-1. Put `gemma4-e2b.task` at `android/app/src/main/assets/gemma4-e2b.task`
-   (or wire download into the `AcuiferoApplication.onCreate`).
-2. Uncomment the MediaPipe dep in `build.gradle.kts`.
-3. `./gradlew :app:assembleDebug`.
-4. Install: `adb install app/build/outputs/apk/debug/app-debug.apk`.
+1. Get the model with the repo's fetch script (same one the backend uses):
+
+   ```bash
+   python scripts/fetch_litert_model.py
+   # writes backend/data/models/gemma-4-E2B-it.litertlm
+   ```
+
+2. Install the debug APK on the device:
+
+   ```bash
+   cd android
+   ./gradlew :app:assembleDebug
+   adb install app/build/outputs/apk/debug/app-debug.apk
+   ```
+
+3. Push the model into the app's internal files dir. Two options:
+
+   ```bash
+   # external storage path (debug build, accessible without run-as)
+   adb push backend/data/models/gemma-4-E2B-it.litertlm \
+     /sdcard/Android/data/com.acuifero.vigia.android/files/gemma-4-E2B-it.litertlm
+
+   # OR the real filesDir via run-as
+   adb push backend/data/models/gemma-4-E2B-it.litertlm /data/local/tmp/
+   adb shell run-as com.acuifero.vigia.android cp \
+     /data/local/tmp/gemma-4-E2B-it.litertlm files/
+   ```
+
+4. Verify with `adb logcat -s GemmaOnDevice`: the first report should print
+   `LiteRT-LM engine ready in <N>ms (gemma-4-E2B-it.litertlm)` followed by a
+   raw JSON envelope. If you see backend sync instead, the model file is not
+   where `GemmaOnDevice` expects it (`context.filesDir/gemma-4-E2B-it.litertlm`).
 
 ## Limitations (honest)
 
 - Physical Android-device validation is still pending; all latency numbers in
-  this doc are projections from public MediaPipe benchmarks, not measurements
+  this doc are projections from public LiteRT-LM benchmarks, not measurements
   on the APK.
-- The reflective loader is a convenience for hackathon CI — production would
-  hard-depend on `tasks-genai` and fail-fast at `Application.onCreate`.
-- No silent backend fallback: this is deliberate. If the on-device claim fails
-  on a given device, the user sees an explicit error.
-- Image multimodal path on MediaPipe Kotlin is scoped for the v2 pitch.
-  For now the image assessment stays backend-only when Android is used.
+- The runtime hard-depends on `litertlm-android` and fail-fasts at engine init
+  if the artifact is missing or the device is too constrained — no silent
+  backend fallback (deliberate, hackathon claim).
+- Image multimodal path on LiteRT-LM Android is wired (`maxNumImages` /
+  `Content.AudioBytes` in `GemmaOnDevice.kt`) but the volunteer flow currently
+  exercises only the text+audio prompts. Image assessment from the Android
+  client stays backend-only for the v1 pitch.

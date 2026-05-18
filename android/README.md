@@ -20,6 +20,34 @@ Expected backend stack:
 - `./scripts/dev.sh`
 - or backend + Ollama + frontend started separately
 
+## On-device Gemma model
+
+The on-device parser (`GemmaOnDevice.kt`) loads `gemma-4-E2B-it.litertlm`
+from the app's internal files dir at runtime. Without it, the app falls
+back to sending the report to the backend.
+
+Get the model:
+
+```bash
+# Downloads to backend/data/models/gemma-4-E2B-it.litertlm
+python scripts/fetch_litert_model.py
+```
+
+Push it to the connected device (debug build, app installed at least once):
+
+```bash
+adb push backend/data/models/gemma-4-E2B-it.litertlm \
+  /sdcard/Android/data/com.acuifero.vigia.android/files/gemma-4-E2B-it.litertlm
+```
+
+Or, for a real `filesDir` placement, use `adb shell run-as
+com.acuifero.vigia.android` and copy into `files/` directly.
+
+Verify with `adb logcat -s GemmaOnDevice`: on first report you should see
+`raw response (audio=...)` followed by a JSON envelope. If you see the
+report being submitted to the backend instead, the model file is not at
+the expected path.
+
 Android tooling note:
 - The official Android tools page says the Android CLI is designed to work with agents and that projects can then be opened in Android Studio for visual tools and debugging.
 - This module is structured to be opened directly in Android Studio under `android/`.

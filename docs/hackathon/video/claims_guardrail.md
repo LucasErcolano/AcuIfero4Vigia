@@ -17,7 +17,7 @@ file first.
 - "Aligned with Plan Nacional para la Reducción del Riesgo de Desastres 2025–2029 priorities on local preparedness."
 - "MVP demo on public and simulated scenarios."
 - "Audible siren on the device itself when the local node fires an alert."
-- "On-device Android volunteer flow uses MediaPipe LLM Inference for Gemma `.task` files." (only if that path is shown — see `docs/hackathon/android_gemma.md`)
+- "On-device Android volunteer flow uses LiteRT-LM Android to load the same `gemma-4-E2B-it.litertlm` artifact as the backend." (only if that path is shown — see `docs/hackathon/android_gemma.md`)
 
 ## B. Reserved for public-data evaluation (NOT in this video)
 

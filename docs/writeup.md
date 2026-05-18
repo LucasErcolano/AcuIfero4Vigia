@@ -77,8 +77,9 @@ por una CNN + reglas:
 
 - **Multimodal nativo on-device.** Un solo pipeline procesa imagen
   curada de la camara fija + transcript del voluntario sin cambio de
-  modelo. Gemma 4 E2B corre sobre Ollama en Raspberry Pi 5 8 GB y sobre
-  MediaPipe LLM Inference en Android mid-range (Snapdragon 7-gen, 8 GB).
+  modelo. Gemma 4 E2B corre sobre LiteRT-LM en Raspberry Pi 5 8 GB y sobre
+  LiteRT-LM Android en Android mid-range (Snapdragon 7-gen, 8 GB) — mismo
+  artifact `gemma-4-E2B-it.litertlm` en ambos targets.
 - **Eleccion de tamano por hardware.** E2B (~1.4 GB Q4) como default
   productivo en Pi 8 GB y mid-range Android; E4B documentado como
   perfil opcional para Pi 16 GB / workstation
@@ -122,11 +123,14 @@ documenta el perfil pero no publica numeros de latencia/RAM peak].
 
 App Kotlin + Jetpack Compose (`compileSdk=34`, `minSdk=26`), Retrofit
 contra el backend, Room para la cola offline con sync worker en
-startup. Runtime LLM via **MediaPipe LLM Inference**
-(`com.google.mediapipe:tasks-genai:0.10.14`), envoltorio en
-`android/.../data/GemmaOnDevice.kt`. Modelo `gemma4-e2b.task` (Q4,
-~1.4 GB) descargado en primer arranque con verificacion SHA-256, no
-empacado en APK (mantiene APK <50 MB). El flujo de reporte voluntario
+startup. Runtime LLM via **LiteRT-LM Android**
+(`com.google.ai.edge.litertlm:litertlm-android:0.11.0`), envoltorio en
+`android/.../data/GemmaOnDevice.kt`. Modelo `gemma-4-E2B-it.litertlm`
+(int4, ~1.4 GB) colocado manualmente en `context.filesDir` (mismo
+artifact que carga el backend); no empacado en APK (mantiene APK
+<50 MB). El plan original era MediaPipe `.task` pero Google no publico
+Gemma 4 en ese formato, asi que Android paso a LiteRT-LM (ver
+[`docs/hackathon/android_gemma.md`](hackathon/android_gemma.md)). El flujo de reporte voluntario
 parsea transcript con few-shot rioplatense de 12 ejemplos sobre corpus
 labeled de 82 frases en 6 provincias (Santa Fe, Corrientes, Chaco,
 Entre Rios, Formosa, conurbano bonaerense). En el dev machine, el

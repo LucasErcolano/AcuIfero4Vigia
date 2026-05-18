@@ -10,7 +10,7 @@ Documento auto-contenido. No requiere contexto previo. Seguilo paso a paso.
 
 **Componentes:**
 - **Acuifero (nodo edge):** Raspberry Pi con cámara, corre Gemma 4 multimodal vía LiteRT-LM. Detecta agua/inundación en vivo.
-- **Vigia (app Android):** corre Gemma 4 con MediaPipe LLM Inference. Permite a un ciudadano reportar en español rioplatense (offline). Sincroniza al volver red.
+- **Vigia (app Android):** corre Gemma 4 con LiteRT-LM Android (mismo `.litertlm` que el backend). Permite a un ciudadano reportar en español rioplatense (offline). Sincroniza al volver red.
 - **Backend FastAPI:** fusiona señales nodo + ciudadano, emite alerta CAP v1.2 a Defensa Civil, dispara sirena/LoRa.
 
 **Objetivo de la demo (video 3 min):** mostrar al jurado que el sistema funciona end-to-end, con foco en por qué Gemma 4 + edge + español local resuelve el problema mejor que las alternativas (Flood Hub, PetaBencana, etc.).

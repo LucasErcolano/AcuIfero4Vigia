@@ -18,7 +18,7 @@ Acuifero 4 + Vigia (A4V) no compite con los grandes sistemas globales ni con los
 
 A4V cubre cinco propiedades que ninguno de los sistemas anteriores ofrece junto:
 
-1. **Edge offline real.** El nodo fijo (Raspberry Pi 5 + Gemma 4 via Ollama) y la app voluntario (Android + MediaPipe LLM Inference) siguen produciendo veredictos y encolando reportes durante el corte de internet que la propia tormenta provoca. Flood Hub, GDACS y SISSA dejan de ser utiles para el usuario final en ese momento.
+1. **Edge offline real.** El nodo fijo (Raspberry Pi 5 + Gemma 4 via LiteRT-LM) y la app voluntario (Android + LiteRT-LM Android, mismo `.litertlm`) siguen produciendo veredictos y encolando reportes durante el corte de internet que la propia tormenta provoca. Flood Hub, GDACS y SISSA dejan de ser utiles para el usuario final en ese momento.
 2. **Dual-source bajo un solo schema.** Vision temporal del nodo + reporte de voluntario en dialecto rioplatense se funden en un unico `FusedAlert` con `decision_trace` auditable. PetaBencana fusiona solo crowdsource; Flood Hub solo modelo hidrologico.
 3. **Espanol rioplatense/litoraleno.** Corpus de 82 ejemplos y prompting few-shot mapean "ya paso la marca", "tapo la calle", "esta subiendo rapido" a enums SINAME. Ningun competidor tiene NLU dialectal hidrologico para AR.
 4. **Razonamiento auditable.** Cada alerta no-verde lleva cadena de razonamiento en castellano + traza deterministica de reglas. Defendible ante coordinador municipal o proceso judicial. Flood Hub publica numeros; GDACS publica niveles; ninguno publica el *por que*.

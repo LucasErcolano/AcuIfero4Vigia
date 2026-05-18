@@ -100,3 +100,13 @@ Thumbs.db
 # --- Internal / outreach (PII, contacts, cookies) ---
 docs/internal/
 docs/outreach/
+
+# --- Designer source bundles ---
+# .design_pkg/ stays tracked as the canonical brand reference. Block
+# accidental re-imports of secondary copies, archives, and tarballs.
+.design_pkg[0-9]*/
+.design_pkg/pkg.tar.gz
+.design_pkg/package.bin
+.design_pkg/package.unzipped
+*Design System*.zip
+*Design System*.tar.gz
