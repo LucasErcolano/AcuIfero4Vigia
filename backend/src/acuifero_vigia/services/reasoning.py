@@ -1,6 +1,6 @@
 """Auditable thinking-mode chain for FusedAlert severity decisions.
 
-Runs a Spanish-language prompt through the local Gemma endpoint and produces a
+Runs an English-language prompt through the local Gemma endpoint and produces a
 ReasoningBlock that accompanies the deterministic decision_trace. Green alerts
 skip the LLM (cost/latency). If Ollama is down, a rule-fallback summary is
 generated so alert emission never blocks on model availability.
@@ -10,9 +10,10 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any, Optional, Protocol
 
-from acuifero_vigia.adapters.llm import OpenAICompatibleLLM
+class TextGenerator(Protocol):
+    def generate_text(self, system_prompt: str, user_prompt: str, max_tokens: int = 320) -> str | None: ...
 
 
 @dataclass
@@ -22,14 +23,11 @@ class ReasoningBlock:
     model_name: str = "rule-fallback"
 
 
-SYSTEM_PROMPT_ES = (
-    "Sos un analista del sistema de alerta temprana de inundaciones "
-    "Acuifero 4 + Vigia. Tu tarea es producir una explicacion auditable en "
-    "espanol rioplatense sobre por que se emitio una alerta con cierto nivel "
-    "de severidad. Siempre nombra las senales concretas por su nombre "
-    "(waterline_ratio, rise_velocity, crossed_critical_line, water_level_category, "
-    "trend, road_status, bridge_status, hydromet) y escribi en 2 a 3 oraciones. "
-    "No inventes datos que no esten en el contexto. No uses markdown."
+SYSTEM_PROMPT = (
+    "You are Gemma running on the Acuifero node. Respond in English. "
+    "Use at most 35 words. Cite signals by name. "
+    "Exact format: Summary: ... Chain: step1 -> step2. "
+    "No markdown and no invented data."
 )
 
 
@@ -42,49 +40,46 @@ def _render_inputs(
     rules_fired: list[str],
 ) -> str:
     parts: list[str] = []
-    parts.append(f"Nivel fusionado: {level} (score={fused_score:.2f}).")
+    parts.append(f"level={level} score={fused_score:.2f}")
     if node_obs:
         parts.append(
-            "Nodo fijo: "
-            f"waterline_ratio={node_obs.get('waterline_ratio', 0):.2f}, "
-            f"rise_velocity={node_obs.get('rise_velocity', 0):.2f}, "
-            f"crossed_critical_line={node_obs.get('crossed_critical_line', False)}, "
-            f"confidence={node_obs.get('confidence', 0):.2f}."
+            "node "
+            f"waterline_ratio={node_obs.get('waterline_ratio', 0):.2f} "
+            f"rise_velocity={node_obs.get('rise_velocity', 0):.2f} "
+            f"crossed_critical_line={node_obs.get('crossed_critical_line', False)} "
+            f"confidence={node_obs.get('confidence', 0):.2f}"
         )
     else:
-        parts.append("Nodo fijo: sin observaciones recientes.")
+        parts.append("node none")
     if volunteer_parsed:
         parts.append(
-            "Reporte voluntario: "
-            f"water_level_category={volunteer_parsed.get('water_level_category', 'unknown')}, "
-            f"trend={volunteer_parsed.get('trend', 'unknown')}, "
-            f"road_status={volunteer_parsed.get('road_status', 'unknown')}, "
-            f"bridge_status={volunteer_parsed.get('bridge_status', 'unknown')}, "
-            f"urgency={volunteer_parsed.get('urgency', 'unknown')}."
+            "vigia "
+            f"water_level_category={volunteer_parsed.get('water_level_category', 'unknown')} "
+            f"trend={volunteer_parsed.get('trend', 'unknown')} "
+            f"road_status={volunteer_parsed.get('road_status', 'unknown')} "
+            f"bridge_status={volunteer_parsed.get('bridge_status', 'unknown')} "
+            f"urgency={volunteer_parsed.get('urgency', 'unknown')}"
         )
-    else:
-        parts.append("Reporte voluntario: no hay reportes recientes.")
     if hydromet:
         parts.append(
-            "Hidromet: "
-            f"precipitacion_mm={hydromet.get('precipitation_mm', 0):.1f}, "
-            f"caudal={hydromet.get('river_discharge', 'NA')}, "
-            f"tendencia={hydromet.get('river_discharge_trend', 'NA')}."
+            "hydromet "
+            f"precipitation_mm={hydromet.get('precipitation_mm', 0):.1f} "
+            f"river_discharge={hydromet.get('river_discharge', 'NA')} "
+            f"river_discharge_trend={hydromet.get('river_discharge_trend', 'NA')}"
         )
     if rules_fired:
-        parts.append("Reglas deterministicas: " + "; ".join(rules_fired) + ".")
-    parts.append(
-        "Produci dos o tres oraciones que expliquen por que este nivel, "
-        "citando al menos dos senales concretas. Luego, en una linea aparte "
-        "comenzada con 'Cadena:', listar 2 o 3 pasos de razonamiento separados por ' -> '."
-    )
+        parts.append("rules " + ", ".join(rules_fired[:4]))
     return "\n".join(parts)
 
 
 def _parse_llm_output(raw: str) -> tuple[str, list[str]]:
     summary = raw.strip()
     chain: list[str] = []
-    if "Cadena:" in summary:
+    if "Chain:" in summary:
+        head, _, tail = summary.partition("Chain:")
+        summary = head.strip()
+        chain = [step.strip() for step in tail.split("->") if step.strip()]
+    elif "Cadena:" in summary:
         head, _, tail = summary.partition("Cadena:")
         summary = head.strip()
         chain = [step.strip() for step in tail.split("->") if step.strip()]
@@ -92,21 +87,38 @@ def _parse_llm_output(raw: str) -> tuple[str, list[str]]:
         # Split into up-to-3 sentence-like fragments as a coarse CoT surrogate.
         pieces = [p.strip() for p in summary.replace("\n", " ").split(".") if p.strip()]
         chain = pieces[:3]
+    if summary.startswith("Summary:"):
+        summary = summary.removeprefix("Summary:").strip()
+    elif summary.startswith("Resumen:"):
+        summary = summary.removeprefix("Resumen:").strip()
     return summary, chain[:5]
 
 
 def _fallback(level: str, rules_fired: list[str]) -> ReasoningBlock:
-    rules = rules_fired or ["sin reglas deterministicas disparadas"]
+    rules = rules_fired or ["no deterministic rules fired"]
     summary = (
-        f"Alerta {level} emitida por regla local. "
-        f"Senales activas: {', '.join(rules[:3])}. "
-        "Gemma no disponible, se usa resumen deterministico."
+        f"{level.upper()} alert emitted by local rule. "
+        f"Active signals: {', '.join(rules[:3])}. "
+        "Gemma unavailable; deterministic summary used."
     )
     return ReasoningBlock(
         llm_summary=summary,
         llm_chain_of_thought=rules[:3],
         model_name="rule-fallback",
     )
+
+
+def _runtime_model_name(llm: object) -> str:
+    if hasattr(llm, "model_name"):
+        value = getattr(llm, "model_name")
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    settings = getattr(llm, "settings", None)
+    if settings is not None:
+        value = getattr(settings, "llm_model", None)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return "unknown-runtime"
 
 
 def generate_alert_reasoning(
@@ -116,9 +128,9 @@ def generate_alert_reasoning(
     volunteer_parsed: Optional[dict[str, Any]],
     hydromet: Optional[dict[str, Any]],
     rules_fired: list[str],
-    llm: Optional[OpenAICompatibleLLM] = None,
+    llm: Optional[TextGenerator] = None,
 ) -> ReasoningBlock:
-    """Produce a Spanish reasoning block for an alert.
+    """Produce an English reasoning block for an alert.
 
     Green alerts return an empty-ish block with only a rule-based single-line
     summary (no LLM call). Yellow/orange/red call the LLM with a deterministic
@@ -126,8 +138,8 @@ def generate_alert_reasoning(
     """
     if level == "green":
         return ReasoningBlock(
-            llm_summary="Nivel verde: no se supera umbral de riesgo. No se invoca Gemma.",
-            llm_chain_of_thought=["sin senales sobre umbral"],
+            llm_summary="Green level: no risk threshold exceeded. Gemma not invoked.",
+            llm_chain_of_thought=["no signals above threshold"],
             model_name="rule-skip-green",
         )
 
@@ -135,7 +147,7 @@ def generate_alert_reasoning(
         return _fallback(level, rules_fired)
 
     user_prompt = _render_inputs(node_obs, volunteer_parsed, hydromet, fused_score, level, rules_fired)
-    raw = llm.generate_text(SYSTEM_PROMPT_ES, user_prompt, max_tokens=320)
+    raw = llm.generate_text(SYSTEM_PROMPT, user_prompt, max_tokens=192)
     if not raw:
         return _fallback(level, rules_fired)
 
@@ -146,7 +158,7 @@ def generate_alert_reasoning(
     return ReasoningBlock(
         llm_summary=summary,
         llm_chain_of_thought=chain,
-        model_name=llm.settings.llm_model,
+        model_name=_runtime_model_name(llm),
     )
 
 

@@ -2,81 +2,95 @@ package com.acuifero.vigia.android.data
 
 import android.content.Context
 import android.util.Log
+import com.google.ai.edge.litertlm.Backend
+import com.google.ai.edge.litertlm.Content
+import com.google.ai.edge.litertlm.Contents
+import com.google.ai.edge.litertlm.Engine
+import com.google.ai.edge.litertlm.EngineConfig
+import com.google.ai.edge.litertlm.Message
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.io.File
 import kotlin.system.measureTimeMillis
 
 /**
- * On-device Gemma wrapper backed by MediaPipe LLM Inference (gemma4-e2b `.task`).
+ * On-device Gemma wrapper backed by LiteRT-LM (`gemma-4-E2B-it.litertlm`).
  *
- * Loaded reflectively so the module compiles even when the `tasks-genai`
- * dependency is not on the classpath (CI / dev machines without Google Maven
- * mirror access). When the real dep is present *and* a model file exists at
- * [modelFile], [structure] runs fully on-device with no network calls.
+ * Format choice: Google publishes Gemma 4 only as `.litertlm` (LiteRT-LM
+ * runtime). MediaPipe `.task` files do not exist for Gemma 4, so the previous
+ * `tasks-genai` path was unusable. LiteRT-LM is the native runtime for the
+ * same artifact the backend loads (`backend/data/models/gemma-4-E2B-it.litertlm`).
  *
- * Contract guarantees (P7 requirement):
- * - Cold-start time logged on first call.
- * - [structure] returns null if the model is unavailable; callers must
- *   surface an explicit error to the user (no silent backend fallback).
- * - Model path is `app-internal files dir / gemma4-e2b.task`.
+ * Contract:
+ * - Model file lives at `context.filesDir/gemma-4-E2B-it.litertlm`.
+ * - [isAvailable] true iff file exists; no silent backend fallback.
+ * - [ensureLoaded] is idempotent and logs cold-start time on first call.
+ * - [structureReport] is suspending; callers must invoke from a coroutine.
  */
 class GemmaOnDevice(private val context: Context) {
-    private var inferenceEngine: Any? = null
+    @Volatile private var engine: Engine? = null
     private var lastColdStartMs: Long = -1
 
-    val modelFile: File get() = File(context.filesDir, "gemma4-e2b.task")
+    val modelFile: File get() = File(context.filesDir, MODEL_FILE_NAME)
 
     fun isAvailable(): Boolean = modelFile.exists()
 
-    fun ensureLoaded(): Boolean {
-        if (inferenceEngine != null) return true
+    suspend fun ensureLoaded(): Boolean = withContext(Dispatchers.IO) {
+        engine?.let { return@withContext true }
         if (!modelFile.exists()) {
-            Log.w(TAG, "Gemma .task asset missing at ${modelFile.absolutePath}")
-            return false
+            Log.w(TAG, "LiteRT-LM model missing at ${modelFile.absolutePath}")
+            return@withContext false
         }
-        return try {
+        runCatching {
             lastColdStartMs = measureTimeMillis {
-                val optionsClass = Class.forName("com.google.mediapipe.tasks.genai.llminference.LlmInference\$LlmInferenceOptions")
-                val builder = optionsClass.getMethod("builder").invoke(null)
-                builder.javaClass.getMethod("setModelPath", String::class.java)
-                    .invoke(builder, modelFile.absolutePath)
-                builder.javaClass.getMethod("setMaxTokens", Int::class.javaPrimitiveType)
-                    .invoke(builder, 256)
-                val options = builder.javaClass.getMethod("build").invoke(builder)
-                val llmClass = Class.forName("com.google.mediapipe.tasks.genai.llminference.LlmInference")
-                inferenceEngine = llmClass.getMethod("createFromOptions", Context::class.java, optionsClass)
-                    .invoke(null, context, options)
+                val config = EngineConfig(
+                    modelPath = modelFile.absolutePath,
+                    backend = Backend.CPU(),
+                    visionBackend = Backend.CPU(),
+                    audioBackend = Backend.CPU(),
+                    maxNumTokens = 2048,
+                    maxNumImages = null,
+                    cacheDir = context.cacheDir.absolutePath,
+                )
+                val built = Engine(config)
+                built.initialize()
+                engine = built
             }
-            Log.i(TAG, "Gemma loaded in ${lastColdStartMs}ms from ${modelFile.absolutePath}")
+            Log.i(TAG, "LiteRT-LM engine ready in ${lastColdStartMs}ms (${modelFile.name})")
             true
-        } catch (t: Throwable) {
-            Log.e(TAG, "Gemma load failed (is com.google.mediapipe:tasks-genai on the classpath?)", t)
-            inferenceEngine = null
+        }.getOrElse { t ->
+            Log.e(TAG, "LiteRT-LM engine init failed", t)
+            engine = null
             false
         }
     }
 
-    /** Returns raw model output or null on failure. */
-    fun generate(prompt: String): String? {
-        if (!ensureLoaded()) return null
-        val engine = inferenceEngine ?: return null
-        return try {
-            val method = engine.javaClass.getMethod("generateResponse", String::class.java)
-            method.invoke(engine, prompt) as? String
-        } catch (t: Throwable) {
-            Log.e(TAG, "Gemma generateResponse failed", t)
+    suspend fun generate(prompt: String, audioWav: ByteArray? = null): String? = withContext(Dispatchers.IO) {
+        if (!ensureLoaded()) return@withContext null
+        val current = engine ?: return@withContext null
+        runCatching {
+            current.createConversation().use { conversation ->
+                val reply: Message = if (audioWav != null) {
+                    val parts: List<Content> = listOf(Content.Text(prompt), Content.AudioBytes(audioWav))
+                    conversation.sendMessage(Contents.of(parts), emptyMap())
+                } else {
+                    conversation.sendMessage(prompt, emptyMap())
+                }
+                reply.contents.contents
+                    .filterIsInstance<Content.Text>()
+                    .joinToString(separator = "") { it.text }
+            }
+        }.getOrElse { t ->
+            Log.e(TAG, "LiteRT-LM generate failed", t)
             null
         }
     }
 
-    /**
-     * Structured volunteer-report parser. Mirrors the backend few-shot prompt
-     * but lives entirely on-device. Returns the raw JSON string; the caller
-     * decodes with Gson into a [ParsedObservation]-shaped object.
-     */
-    fun structureReport(transcript: String): String? {
-        if (transcript.isBlank()) return null
-        val prompt = buildFewShotPrompt(transcript)
-        val raw = generate(prompt) ?: return null
+    suspend fun structureReport(transcript: String, audioWav: ByteArray? = null): String? {
+        if (transcript.isBlank() && audioWav == null) return null
+        val prompt = if (audioWav != null) buildAudioPrompt() else buildFewShotPrompt(transcript)
+        val raw = generate(prompt, audioWav) ?: return null
+        Log.i(TAG, "raw response (audio=${audioWav != null}, ${raw.length} chars): ${raw.take(400)}")
         val start = raw.indexOf('{')
         val end = raw.lastIndexOf('}')
         if (start == -1 || end == -1 || end < start) return null
@@ -87,6 +101,7 @@ class GemmaOnDevice(private val context: Context) {
 
     companion object {
         private const val TAG = "GemmaOnDevice"
+        const val MODEL_FILE_NAME = "gemma-4-E2B-it.litertlm"
 
         private fun buildFewShotPrompt(transcript: String): String = """
             Sos un parser de reportes de voluntarios en espanol rioplatense.
@@ -97,6 +112,16 @@ class GemmaOnDevice(private val context: Context) {
             Ejemplo: {"water_level_category":"low","trend":"stable","road_status":"open","bridge_status":"open","homes_affected":false,"urgency":"low","summary":"tranquilo","confidence":0.9}
 
             Transcript: $transcript
+            JSON:
+        """.trimIndent()
+
+        private fun buildAudioPrompt(): String = """
+            Sos un parser de reportes de voluntarios en espanol rioplatense.
+            Escucha el audio adjunto, transcribi mentalmente y devolve SOLO un JSON con claves:
+            water_level_category, trend, road_status, bridge_status, homes_affected, urgency, summary, confidence.
+
+            Ejemplo: {"water_level_category":"critical","trend":"rising","road_status":"blocked","bridge_status":"unknown","homes_affected":false,"urgency":"critical","summary":"paso la marca","confidence":0.9}
+
             JSON:
         """.trimIndent()
     }

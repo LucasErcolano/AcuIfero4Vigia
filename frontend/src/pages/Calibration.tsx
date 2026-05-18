@@ -58,10 +58,6 @@ export default function Calibration() {
     })();
   }, [id]);
 
-  useEffect(() => {
-    draw();
-  });
-
   const draw = () => {
     const canvas = canvasRef.current;
     const img = imgRef.current;
@@ -114,6 +110,10 @@ export default function Calibration() {
     drawLine(referenceLine, '#f59e0b');
   };
 
+  useEffect(() => {
+    draw();
+  });
+
   const onImgLoad = () => {
     const img = imgRef.current;
     if (!img) return;
@@ -155,8 +155,8 @@ export default function Calibration() {
   const save = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!id) return;
-    if (roi.length < 4) { setError('Dibujá un polígono de ROI de al menos 4 puntos.'); return; }
-    if (criticalLine.length !== 2) { setError('Marcá 2 puntos para la línea crítica.'); return; }
+    if (roi.length < 4) { setError('Draw an ROI polygon with at least 4 points.'); return; }
+    if (criticalLine.length !== 2) { setError('Mark 2 points for the critical line.'); return; }
     setIsSaving(true);
     setError(null);
     setMessage(null);
@@ -173,29 +173,29 @@ export default function Calibration() {
         body: JSON.stringify(payload),
       });
       if (!r.ok) throw new Error(await r.text());
-      setMessage('Calibración guardada.');
+      setMessage('Calibration saved.');
       setTimeout(() => navigate(`/sites/${id}`), 700);
     } catch (e) {
       console.error(e);
-      setError('No se pudo guardar la calibración.');
+      setError('Could not save calibration.');
     } finally {
       setIsSaving(false);
     }
   };
 
   const instruction = () => {
-    if (mode === 'roi') return `Click para agregar puntos del polígono ROI (${roi.length} colocados, mínimo 4).`;
-    if (mode === 'critical') return `Click 2 puntos para la línea crítica (${criticalLine.length}/2).`;
-    if (mode === 'reference') return `Click 2 puntos para la línea de referencia (${referenceLine.length}/2) — opcional.`;
-    return 'Calibración lista. Guardá para aplicarla.';
+    if (mode === 'roi') return `Click to add ROI polygon points (${roi.length} placed, minimum 4).`;
+    if (mode === 'critical') return `Click 2 points for the critical line (${criticalLine.length}/2).`;
+    if (mode === 'reference') return `Click 2 points for the reference line (${referenceLine.length}/2) — optional.`;
+    return 'Calibration ready. Save to apply.';
   };
 
   return (
     <div className="space-y-6 pb-20">
       <div>
-        <h2 className="text-2xl font-bold text-gray-900">Calibración del sitio</h2>
+        <h2 className="text-2xl font-bold text-gray-900">Site calibration</h2>
         <p className="text-sm text-gray-500 mt-1">
-          Hacé click sobre el frame de referencia para dibujar la ROI y las líneas. Los datos se guardan en el mismo endpoint que la versión numérica.
+          Click on the reference frame to draw the ROI and lines. Data is saved to the same endpoint as the numeric version.
         </p>
       </div>
 
@@ -223,29 +223,29 @@ export default function Calibration() {
                 <Undo2 className="w-4 h-4" /> Reset
               </button>
               <button type="button" onClick={next} disabled={mode === 'done'} className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
-                {mode === 'roi' ? 'Siguiente: línea crítica' : mode === 'critical' ? 'Siguiente: referencia' : mode === 'reference' ? 'Listo' : 'Listo'}
+                {mode === 'roi' ? 'Next: critical line' : mode === 'critical' ? 'Next: reference' : mode === 'reference' ? 'Done' : 'Done'}
               </button>
             </div>
           </div>
         </section>
       ) : (
         <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-4 text-sm text-yellow-800">
-          No hay frame de referencia cargado para este sitio. Subí uno desde el seed o ejecutá <code>scripts/fetch_demo_assets.py</code>.
+          No reference frame loaded for this site. Upload one from the seed or run <code>scripts/fetch_demo_assets.py</code>.
         </div>
       )}
 
       <form onSubmit={save} className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm space-y-4">
         <label className="block text-sm font-medium text-gray-700">
-          Notas
+          Notes
           <textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             className="mt-1 min-h-[80px] w-full rounded-lg border border-gray-300 px-3 py-2"
-            placeholder="Observaciones sobre la cámara, condiciones o marcas de referencia."
+            placeholder="Notes on the camera, conditions, or reference marks."
           />
         </label>
         <div className="text-xs text-gray-500">
-          ROI: {roi.length} puntos · Crítica: {criticalLine.length}/2 · Referencia: {referenceLine.length}/2
+          ROI: {roi.length} points · Critical: {criticalLine.length}/2 · Reference: {referenceLine.length}/2
         </div>
         {message && <div className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">{message}</div>}
         {error && <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</div>}
@@ -255,7 +255,7 @@ export default function Calibration() {
           className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
         >
           {isSaving ? <LoaderCircle className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-          {isSaving ? 'Guardando...' : 'Guardar calibración'}
+          {isSaving ? 'Saving...' : 'Save calibration'}
         </button>
       </form>
     </div>

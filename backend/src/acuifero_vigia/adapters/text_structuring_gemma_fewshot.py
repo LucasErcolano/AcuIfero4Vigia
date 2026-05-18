@@ -10,9 +10,33 @@ backend detects the local Gemma runtime is reachable.
 from __future__ import annotations
 
 import json
+import os
 from typing import Any
 
+from typing import Protocol
+
 from acuifero_vigia.adapters.llm import OpenAICompatibleLLM
+
+
+class _TextGenClient(Protocol):
+    def generate_text(self, system_prompt: str, user_prompt: str, max_tokens: int = ...) -> str | None: ...
+
+
+def _resolve_fewshot_count(total: int) -> int:
+    """Number of few-shot examples to inline in the prompt.
+
+    Defaults to all of them (max accuracy). On CPU-only dev machines, set
+    ACUIFERO_FEWSHOT_COUNT to a smaller number (e.g. 4) to keep prompt
+    processing under a usable latency budget.
+    """
+    raw = os.environ.get("ACUIFERO_FEWSHOT_COUNT")
+    if not raw:
+        return total
+    try:
+        n = int(raw)
+    except ValueError:
+        return total
+    return max(1, min(n, total))
 
 
 FEW_SHOT = [
@@ -188,7 +212,8 @@ SYSTEM_PROMPT = (
 def _build_user_prompt(transcript: str, site_context: dict[str, Any]) -> str:
     parts = [f"Contexto del sitio: {json.dumps(site_context, ensure_ascii=True)}"]
     parts.append("Ejemplos:")
-    for ex in FEW_SHOT:
+    count = _resolve_fewshot_count(len(FEW_SHOT))
+    for ex in FEW_SHOT[:count]:
         parts.append(f"Transcript: {ex['in']}")
         parts.append(f"JSON: {json.dumps(ex['out'], ensure_ascii=True)}")
     parts.append(f"Transcript: {transcript}")
@@ -203,7 +228,7 @@ class GemmaFewShotTextStructurer:
     `services.report_structuring` picks it up unchanged.
     """
 
-    def __init__(self, llm: OpenAICompatibleLLM) -> None:
+    def __init__(self, llm: _TextGenClient | OpenAICompatibleLLM) -> None:
         self._llm = llm
 
     def structure_observation(self, transcript: str, site_context: dict[str, Any]) -> dict[str, Any] | None:

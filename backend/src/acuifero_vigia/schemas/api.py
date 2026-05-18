@@ -19,6 +19,7 @@ class CalibrationPayload(BaseModel):
 class RuntimeStatus(BaseModel):
     is_online: bool
     llm: dict[str, Any]
+    acuifero: dict[str, Any]
     hydromet: dict[str, Any]
 
 

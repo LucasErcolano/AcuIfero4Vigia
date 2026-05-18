@@ -70,9 +70,9 @@ backend sync in that case.
 
 ## Limitations (honest)
 
-- No physical Android device was available on the dev machine for end-to-end
-  validation; all latency numbers in this doc are projections from public
-  MediaPipe benchmarks, not measurements on our APK.
+- Physical Android-device validation is still pending; all latency numbers in
+  this doc are projections from public MediaPipe benchmarks, not measurements
+  on the APK.
 - The reflective loader is a convenience for hackathon CI — production would
   hard-depend on `tasks-genai` and fail-fast at `Application.onCreate`.
 - No silent backend fallback: this is deliberate. If the on-device claim fails

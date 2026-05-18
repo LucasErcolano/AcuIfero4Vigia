@@ -1,7 +1,31 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { API_BASE, type Site } from '../store';
-import { CloudRain, Gauge, LoaderCircle, PlayCircle, Save, TriangleAlert, Upload, Video } from 'lucide-react';
+import { API_BASE, useAppStore, type Site } from '../store';
+import {
+  CheckCircle2,
+  CloudRain,
+  FileText,
+  Gauge,
+  LoaderCircle,
+  PlayCircle,
+  Save,
+  Send,
+  Siren,
+  TriangleAlert,
+  Upload,
+  Video,
+  Waves,
+} from 'lucide-react';
+
+type SeverityLevel = 'minor' | 'moderate' | 'severe';
+
+function alertLevelToSeverity(level: string): SeverityLevel {
+  const l = level.toLowerCase();
+  if (l === 'red') return 'severe';
+  if (l === 'orange') return 'moderate';
+  if (l === 'yellow') return 'minor';
+  return 'minor';
+}
 
 interface Calibration {
   roi_polygon?: number[][] | null;
@@ -101,6 +125,17 @@ export default function SiteDetail() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isAnalyzingSample, setIsAnalyzingSample] = useState(false);
+  const [isEmittingCap, setIsEmittingCap] = useState(false);
+  const [capXml, setCapXml] = useState<string | null>(null);
+  const [isExportingSinagir, setIsExportingSinagir] = useState(false);
+  const [sinagirJson, setSinagirJson] = useState<string | null>(null);
+  const [actionLog, setActionLog] = useState<string[]>([]);
+  const emitCap = useAppStore((s) => s.emitCap);
+
+  const pushAction = (msg: string) => {
+    const t = new Date().toLocaleTimeString();
+    setActionLog((prev) => [`${t}  ${msg}`, ...prev].slice(0, 6));
+  };
 
   const hasSite = Boolean(id);
 
@@ -211,6 +246,56 @@ export default function SiteDetail() {
       setIsAnalyzing(false);
     }
   };
+
+  const handleEmitCap = async () => {
+    if (!site || !analysisResult) return;
+    setIsEmittingCap(true);
+    setError(null);
+    try {
+      const severity = alertLevelToSeverity(analysisResult.alert.level);
+      const xml = await emitCap({
+        site_id: site.id,
+        lat: site.lat,
+        lon: site.lng,
+        severity,
+        headline: `${severity} alert at ${site.name}`,
+        instruction: 'Coordinate with Civil Defense before public dissemination.',
+        summary: analysisResult.alert.summary,
+        areaDesc: site.region,
+      });
+      setCapXml(xml);
+      pushAction(`CAP XML emitted (${severity}) for ${site.name}`);
+    } catch (capError) {
+      console.error(capError);
+      setError('Could not emit CAP. Check backend.');
+    } finally {
+      setIsEmittingCap(false);
+    }
+  };
+
+  const handleExportSinagir = async () => {
+    if (!analysisResult?.alert?.id) return;
+    setIsExportingSinagir(true);
+    setError(null);
+    try {
+      const res = await fetch(`${API_BASE}/alerts/${analysisResult.alert.id}/export-sinagir`, {
+        method: 'POST',
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const json = await res.text();
+      setSinagirJson(json);
+      pushAction(`SINAGIR JSON exported for alert #${analysisResult.alert.id}`);
+    } catch (e) {
+      console.error(e);
+      setError('Could not export SINAGIR.');
+    } finally {
+      setIsExportingSinagir(false);
+    }
+  };
+
+  const simulateSiren = () => pushAction('Siren: SIMULATED trigger (demo, no real actuator)');
+  const simulateLora = () => pushAction('LoRa: SIMULATED payload emitted (demo, no real radio)');
+  const simulateNotify = () => pushAction('Notification: SIMULATED push to operator (demo)');
 
   const runBundledSample = async () => {
     if (!id) {
@@ -402,7 +487,7 @@ export default function SiteDetail() {
                 {analysisResult.alert.reasoning_summary && (
                   <details className="mt-3 rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
                     <summary className="cursor-pointer font-semibold text-blue-800">
-                      Razonamiento de Gemma ({analysisResult.alert.reasoning_model ?? 'local'})
+                      Gemma reasoning ({analysisResult.alert.reasoning_model ?? 'local'})
                     </summary>
                     <p className="mt-2 whitespace-pre-wrap">{analysisResult.alert.reasoning_summary}</p>
                     {parseChain(analysisResult.alert.reasoning_chain).length > 0 && (
@@ -445,6 +530,76 @@ export default function SiteDetail() {
                 </div>
               )}
             </div>
+          </div>
+        )}
+
+        {analysisResult && (
+          <div className="mt-6 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+            <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+              <h4 className="font-semibold text-gray-900 flex items-center gap-2">
+                <Siren className="w-5 h-5 text-orange-500" /> Command center
+              </h4>
+              <span className="text-xs text-gray-500">
+                Siren / LoRa / Notify are demo-simulated. CAP + SINAGIR hit the real backend.
+              </span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={handleEmitCap}
+                disabled={isEmittingCap || !site}
+                className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                {isEmittingCap ? <LoaderCircle className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                Emit CAP
+              </button>
+              <button
+                onClick={handleExportSinagir}
+                disabled={isExportingSinagir || !analysisResult.alert.id}
+                className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-800 hover:border-blue-300 hover:text-blue-700 disabled:opacity-50"
+                title={analysisResult.alert.id ? '' : 'Backend did not return an alert id'}
+              >
+                <FileText className="w-4 h-4" /> Export SINAGIR
+              </button>
+              <button
+                onClick={simulateSiren}
+                className="inline-flex items-center gap-2 rounded-lg bg-orange-600 px-3 py-2 text-sm font-semibold text-white hover:bg-orange-700"
+              >
+                <Siren className="w-4 h-4" /> Trigger siren (sim)
+              </button>
+              <button
+                onClick={simulateLora}
+                className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-800 hover:border-blue-300 hover:text-blue-700"
+              >
+                <Waves className="w-4 h-4" /> Send LoRa (sim)
+              </button>
+              <button
+                onClick={simulateNotify}
+                className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-800 hover:border-blue-300 hover:text-blue-700"
+              >
+                <CheckCircle2 className="w-4 h-4" /> Notify operator (sim)
+              </button>
+            </div>
+
+            {actionLog.length > 0 && (
+              <ol className="mt-4 space-y-1 text-xs text-gray-600 font-mono">
+                {actionLog.map((line, i) => (
+                  <li key={i}>{line}</li>
+                ))}
+              </ol>
+            )}
+
+            {capXml && (
+              <details className="mt-4 rounded-lg border border-gray-200 bg-gray-50 p-3">
+                <summary className="cursor-pointer text-sm font-semibold text-gray-800">CAP XML payload</summary>
+                <pre className="mt-2 overflow-x-auto text-xs text-gray-700 whitespace-pre-wrap">{capXml}</pre>
+              </details>
+            )}
+            {sinagirJson && (
+              <details className="mt-3 rounded-lg border border-gray-200 bg-gray-50 p-3">
+                <summary className="cursor-pointer text-sm font-semibold text-gray-800">SINAGIR JSON</summary>
+                <pre className="mt-2 overflow-x-auto text-xs text-gray-700 whitespace-pre-wrap">{sinagirJson}</pre>
+              </details>
+            )}
           </div>
         )}
       </section>

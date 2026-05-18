@@ -9,6 +9,14 @@ from acuifero_vigia.adapters.image_assessment import (
     GemmaImageAssessmentAdapter,
     _parse_json_block,
 )
+from acuifero_vigia.core.settings import get_settings
+
+
+@pytest.fixture(autouse=True)
+def clear_settings_cache():
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
 
 
 def test_parse_json_block_extracts_dict():
@@ -29,6 +37,7 @@ def test_adapter_returns_none_for_missing_path(tmp_path: Path):
 
 
 def test_adapter_handles_http_error(monkeypatch, tmp_path: Path):
+    monkeypatch.setenv("ACUIFERO_MULTIMODAL_VERIFIER_ENABLED", "true")
     img = tmp_path / "x.jpg"
     img.write_bytes(b"\x89PNG\r\n\x1a\nfakebytes")
 
@@ -41,6 +50,7 @@ def test_adapter_handles_http_error(monkeypatch, tmp_path: Path):
 
 
 def test_adapter_parses_success(monkeypatch, tmp_path: Path):
+    monkeypatch.setenv("ACUIFERO_MULTIMODAL_VERIFIER_ENABLED", "true")
     img = tmp_path / "x.jpg"
     img.write_bytes(b"\x89PNG\r\n\x1a\nfakebytes")
 
@@ -66,3 +76,27 @@ def test_adapter_parses_success(monkeypatch, tmp_path: Path):
     assert result.infrastructure_at_risk is True
     assert 0.79 < result.confidence < 0.81
     assert "puente" in result.description_es.lower()
+
+
+def test_adapter_uses_embedded_runtime_when_present(monkeypatch, tmp_path: Path):
+    monkeypatch.setenv("ACUIFERO_MULTIMODAL_VERIFIER_ENABLED", "true")
+    img = tmp_path / "x.jpg"
+    img.write_bytes(b"\x89PNG\r\n\x1a\nfakebytes")
+
+    class FakeRuntime:
+        model_name = "gemma-4-E2B-it.litertlm"
+
+        def generate_multimodal_json(self, *args, **kwargs):
+            return {
+                "description_es": "Agua alta sobre el cauce.",
+                "water_visible": True,
+                "infrastructure_at_risk": False,
+                "confidence": 0.74,
+            }
+
+    adapter = GemmaImageAssessmentAdapter(runtime=FakeRuntime(), force_embedded=True)
+    result = adapter.assess(img)
+
+    assert result is not None
+    assert result.model_name == "gemma-4-E2B-it.litertlm"
+    assert result.water_visible is True

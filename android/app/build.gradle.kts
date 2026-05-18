@@ -16,7 +16,10 @@ android {
         versionCode = 1
         versionName = "0.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        buildConfigField("String", "DEFAULT_API_BASE_URL", "\"http://10.0.2.2:8000/api/\"")
+        val defaultApiBaseUrl = System.getenv("ACUIFERO_API_BASE_URL")
+            ?: providers.gradleProperty("acuifero.apiBaseUrl").orNull
+            ?: "http://10.0.2.2:8000/api/"
+        buildConfigField("String", "DEFAULT_API_BASE_URL", "\"$defaultApiBaseUrl\"")
     }
 
     buildTypes {
@@ -40,6 +43,11 @@ android {
         compose = true
         buildConfig = true
     }
+    testOptions {
+        unitTests {
+            isReturnDefaultValues = true
+        }
+    }
 }
 
 dependencies {
@@ -62,20 +70,30 @@ dependencies {
     implementation("com.squareup.retrofit2:converter-gson:2.11.0")
     implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
 
-    implementation("androidx.room:room-runtime:2.6.1")
-    implementation("androidx.room:room-ktx:2.6.1")
-    ksp("androidx.room:room-compiler:2.6.1")
+    implementation("androidx.room:room-runtime:2.7.0")
+    implementation("androidx.room:room-ktx:2.7.0")
+    ksp("androidx.room:room-compiler:2.7.0")
 
     implementation("androidx.work:work-runtime-ktx:2.9.1")
     implementation("io.coil-kt:coil-compose:2.7.0")
 
-    // On-device Gemma via MediaPipe LLM Inference (requires a gemma4-e2b .task file).
-    // The Kotlin glue in data/GemmaOnDevice.kt compiles without this dep (uses reflection) so
-    // the hackathon CI still builds on machines without Google's maven mirror; enable the dep
-    // locally before bundling a real .task asset.
-    // implementation("com.google.mediapipe:tasks-genai:0.10.14")
+    // On-device Gemma via LiteRT-LM. Loads gemma-4-E2B-it.litertlm (same artifact
+    // the backend uses) from app filesDir. MediaPipe tasks-genai was dropped because
+    // Google has not published a Gemma 4 .task file; the .litertlm format is the only
+    // public artifact for Gemma 4 and LiteRT-LM is its native runtime.
+    implementation("com.google.ai.edge.litertlm:litertlm-android:0.11.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 
     debugImplementation(composeBom)
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
+
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.mockito:mockito-core:5.14.2")
+    testImplementation("org.mockito.kotlin:mockito-kotlin:5.4.0")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1")
+    testImplementation("androidx.arch.core:core-testing:2.2.0")
+    testImplementation("androidx.room:room-testing:2.7.0")
+    testImplementation("org.robolectric:robolectric:4.13")
+    testImplementation("androidx.test:core:1.6.1")
 }

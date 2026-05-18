@@ -9,19 +9,21 @@ dependencies = [
     "uvicorn",
     "sqlmodel",
     "pydantic",
-    "opencv-python-headless",
-    "numpy",
+    "pillow",
     "python-multipart",
     "aiofiles",
     "httpx",
     "orjson",
-    "faster-whisper"
+    "faster-whisper",
+    "lxml",
+    "litert-lm-api==0.11.0"
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest",
-    "pytest-asyncio"
+    "pytest-asyncio",
+    "trio"
 ]
 
 [build-system]

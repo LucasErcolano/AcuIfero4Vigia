@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Protocol
 
 import httpx
+from PIL import Image, ImageOps
 
 from acuifero_vigia.core.settings import get_settings
 
@@ -79,9 +80,19 @@ def _build_user_prompt() -> str:
     return "\n".join(parts)
 
 
-def _encode_image(path: Path) -> str:
-    with path.open("rb") as handle:
-        return base64.b64encode(handle.read()).decode("ascii")
+def _encode_image(path: Path, *, max_side: int, jpeg_quality: int = 82) -> str:
+    try:
+        from io import BytesIO
+
+        with Image.open(path) as image:
+            image = ImageOps.exif_transpose(image).convert("RGB")
+            if max_side > 0:
+                image.thumbnail((max_side, max_side), Image.Resampling.LANCZOS)
+            buffer = BytesIO()
+            image.save(buffer, format="JPEG", quality=jpeg_quality, optimize=True)
+            return base64.b64encode(buffer.getvalue()).decode("ascii")
+    except Exception:
+        return base64.b64encode(path.read_bytes()).decode("ascii")
 
 
 def _parse_json_block(text: str) -> dict | None:
@@ -98,28 +109,39 @@ def _parse_json_block(text: str) -> dict | None:
 
 
 class GemmaImageAssessmentAdapter:
-    """Calls Gemma through Ollama's `/api/chat` with inline base64 images.
+    """Calls Gemma through Ollama's `/api/chat` with one optimized image."""
 
-    Tries the configured model (typically E4B). On network failure or invalid
-    output it logs and returns None; callers persist a degraded placeholder.
-    """
-
-    def __init__(self) -> None:
+    def __init__(self, runtime: object | None = None, *, force_embedded: bool = False) -> None:
         self.settings = get_settings()
+        self.runtime = runtime
+        self.force_embedded = force_embedded
 
     @property
     def model_name(self) -> str:
-        return self.settings.llm_model
+        if self.runtime is not None and self.force_embedded:
+            return str(getattr(self.runtime, "model_name", self.settings.acuifero_multimodal_model))
+        return self.settings.acuifero_multimodal_model
 
     def assess(self, image_path: str | Path) -> ImageAssessmentResult | None:
-        if not self.settings.llm_enabled:
-            return None
         path = Path(image_path)
         if not path.exists():
             return None
 
-        encoded = _encode_image(path)
-        primary = self.settings.llm_model
+        if self.runtime is not None and self.force_embedded:
+            return self._assess_embedded(path)
+
+        if not self.settings.llm_enabled:
+            return None
+        multimodal_allowed = (
+            self.settings.acuifero_multimodal_verifier_enabled
+            or self.settings.acuifero_multimodal_enabled
+            or self.settings.vigia_image_enabled
+        )
+        if not multimodal_allowed:
+            return None
+
+        encoded = _encode_image(path, max_side=self.settings.acuifero_multimodal_image_max_side)
+        primary = self.settings.acuifero_multimodal_model
         fallback = "gemma4:e2b" if primary != "gemma4:e2b" else None
 
         result = self._call_model(primary, encoded)
@@ -127,14 +149,45 @@ class GemmaImageAssessmentAdapter:
             result = self._call_model(fallback, encoded)
         return result
 
+    def _assess_embedded(self, path: Path) -> ImageAssessmentResult | None:
+        if self.runtime is None:
+            return None
+        payload = self.runtime.generate_multimodal_json(
+            FEW_SHOT_SYSTEM,
+            _build_user_prompt(),
+            [path],
+            max_tokens=256,
+        )
+        if not isinstance(payload, dict):
+            return None
+        description = str(payload.get("description_es", "")).strip()
+        if not description:
+            return None
+        try:
+            confidence = float(payload.get("confidence", 0.5))
+        except (TypeError, ValueError):
+            confidence = 0.5
+        return ImageAssessmentResult(
+            description_es=description,
+            water_visible=bool(payload.get("water_visible", False)),
+            infrastructure_at_risk=bool(payload.get("infrastructure_at_risk", False)),
+            confidence=max(0.0, min(1.0, confidence)),
+            raw_model_output=json.dumps(payload, ensure_ascii=True),
+            model_name=self.model_name,
+        )
+
     def _ollama_chat_url(self) -> str:
-        return self.settings.llm_base_url.rstrip("/").removesuffix("/v1") + "/api/chat"
+        return self.settings.acuifero_multimodal_base_url.rstrip("/").removesuffix("/v1") + "/api/chat"
 
     def _call_model(self, model_name: str, encoded_image: str) -> ImageAssessmentResult | None:
         payload = {
             "model": model_name,
             "stream": False,
             "format": "json",
+            # Gemma 4 routes output into message.thinking by default; disable so
+            # message.content holds the JSON we asked for (same workaround used
+            # in adapters/llm.py).
+            "think": False,
             "messages": [
                 {"role": "system", "content": FEW_SHOT_SYSTEM},
                 {
@@ -143,10 +196,14 @@ class GemmaImageAssessmentAdapter:
                     "images": [encoded_image],
                 },
             ],
-            "options": {"temperature": 0.1, "num_predict": 256},
+            "options": {
+                "temperature": 0.1,
+                "num_ctx": self.settings.acuifero_multimodal_num_ctx,
+                "num_predict": self.settings.acuifero_multimodal_num_predict,
+            },
         }
         try:
-            with httpx.Client(timeout=self.settings.llm_timeout_seconds) as client:
+            with httpx.Client(timeout=self.settings.acuifero_multimodal_timeout_seconds) as client:
                 response = client.post(self._ollama_chat_url(), json=payload)
                 response.raise_for_status()
             body = response.json()

@@ -1,66 +1,58 @@
-# P2 — Gemma Multimodal on Evidence Frames
+# P2 - Gemma Temporal Assessment and Evidence Frames
 
-CV pipeline remains the authoritative severity signal. Gemma multimodal is
-**explanatory** — it describes what the evidence frame shows in Spanish for
-operators, and flags gross hazards (water visible, infrastructure at risk) that
-can corroborate the numeric CV output.
+`Acuifero` is now a **Gemma-first temporal assessment engine**. The evidence
+frame overlay remains part of the demo, but it is no longer the core claim.
+The core claim is that Gemma consumes a curated temporal bundle and emits the
+node verdict.
 
-Adapter: `backend/src/acuifero_vigia/adapters/image_assessment.py`.
-Trigger: any `NodeObservation` with `crossed_critical_line=True` or
-`severity_score >= 0.5`. Fallback: primary model (configured, typically E4B)
-→ E2B → skip (observation persists without description).
-Endpoint: `POST /api/node/explain-frame` (accepts any uploaded frame).
+## Current architecture
 
-## Comparison across three frames
+- OpenCV: sampling, ROI/band processing, overlays, waterline ratio hints, motion/contrast/edge hints.
+- Gemma runner: receives the temporal evidence pack and returns:
+  - `assessment_level`
+  - `assessment_score`
+  - `temporal_summary`
+  - `reasoning_summary`
+  - `reasoning_steps`
+  - `critical_evidence`
+- Image assessment overlay: optional supporting view rendered over the chosen
+  evidence frame for operators and judges.
 
-Using `fixtures/frames/silverado_060s.jpg` and two synthetic frames from
-`backend/tests/conftest.py::_build_test_video`:
+## Demo comparison
 
-### Frame A — Silverado reference frame (real USGS clip)
+Using `fixtures/frames/silverado_060s.jpg` and two synthetic frames from the
+test fixture:
 
-| Source | Output |
-|---|---|
-| OpenCV numeric | `waterline_ratio=0.78`, `crossed_critical_line=True`, `rise_velocity=0.12`, `confidence=0.81` |
-| Gemma E2B | "Se ve el cauce con agua turbia ocupando gran parte del encuadre; la estructura aguas arriba no es claramente visible. water_visible=true, infrastructure_at_risk=true, conf=0.72" |
-| Gemma E4B | "El flujo de agua supera la linea media del cuadro, arrastra sedimentos y cubre la base de la camara fija. La calzada lateral parece aun transitable. water_visible=true, infrastructure_at_risk=true, conf=0.83" |
-
-### Frame B — synthetic rising waterline (test fixture, frame 15)
-
-| Source | Output |
-|---|---|
-| OpenCV | `waterline_ratio=0.44`, `crossed=True`, `confidence=0.66` |
-| Gemma E2B | "Banda inferior oscura que crece hacia la linea clara central; sin infraestructura visible. water_visible=true, infrastructure_at_risk=false, conf=0.6" |
-| Gemma E4B | (same prompt; not re-run on synthetic — E2B sufficient) |
-
-### Frame C — synthetic calm baseline (test fixture, frame 0)
+### Frame/sequence A - Silverado reference sequence
 
 | Source | Output |
 |---|---|
-| OpenCV | `waterline_ratio=0.12`, `crossed=False`, `confidence=0.74` |
-| Gemma | *skipped* — `severity_score=0.18 < 0.5`, adapter not invoked |
+| Temporal evidence builder | Curated highest-risk window + selected frame bundle + ratio/motion/edge hints |
+| Gemma temporal runner | `assessment_level=red`, `assessment_score~0.8+`, temporal summary describing sustained rise and corroborating critical evidence |
+| Evidence-frame overlay | Spanish one-line description of visible water and infrastructure risk |
 
-## Latency budget
+### Frame/sequence B - synthetic rising waterline
 
-Measured on dev machine (Ryzen 5 7530U, no CUDA, Ollama CPU path):
+| Source | Output |
+|---|---|
+| Temporal evidence builder | Rising lower band preserved across the curated sequence |
+| Gemma temporal runner | Orange/red depending on runner availability and fallback |
+| Evidence-frame overlay | Water visible, no meaningful infrastructure context |
 
-| Model | Cold start | Warm call |
-|---|---|---|
-| `gemma4:e2b` | ~6.5 s | ~3.1 s |
-| `gemma4:e4b` | exceeds 8 s budget → auto-fallback to E2B |
+### Frame/sequence C - synthetic calm baseline
 
-The adapter tries primary, then falls back to E2B on timeout or empty output.
-
-## Tests
-
-`backend/tests/test_image_assessment.py`:
-- `_parse_json_block` happy path + junk rejection,
-- missing-path short-circuit,
-- httpx ConnectError propagated as `None`,
-- successful mock response parses into a typed `ImageAssessmentResult`.
+| Source | Output |
+|---|---|
+| Temporal evidence builder | Low ratio hints, low escalation evidence |
+| Gemma temporal runner | Green/yellow depending on the exact bundle and fallback path |
+| Evidence-frame overlay | May be skipped or produce a conservative low-risk description |
 
 ## Honesty note
 
-The multimodal adapter does not influence `severity_score` — it only writes
-descriptive columns on `NodeObservation`. This preserves the deterministic
-decision pipeline and keeps the reviewer story clean: CV is the judge, Gemma
-is the narrator.
+The demo still shows an evidence-frame caption because it is visually strong,
+but the architectural novelty is no longer "Gemma narrates what OpenCV already
+decided". The novelty is:
+
+1. bounded temporal evidence curation on the edge
+2. Gemma-first node assessment over that sequence
+3. persistence of a rich audit pack for review and judging

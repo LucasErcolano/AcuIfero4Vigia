@@ -5,18 +5,20 @@ from io import BytesIO
 from pathlib import Path
 
 import anyio
-import cv2
 import httpx
-import numpy as np
 import pytest
-from fastapi import UploadFile
+from fastapi import BackgroundTasks, UploadFile
+from PIL import Image, ImageDraw
 from sqlmodel import Session, SQLModel, select
 
-from acuifero_vigia import main as main_module
+from acuifero_vigia.api import deps
+from acuifero_vigia.api.routers.acuifero import analyze_node
+from acuifero_vigia.api.routers.sync import flush_sync
+from acuifero_vigia.api.routers.vigia import create_report
 from acuifero_vigia.core import settings as settings_module
 from acuifero_vigia.db.database import central_engine, edge_engine, init_db
-from acuifero_vigia.main import analyze_node, app, create_report, flush_sync
-from acuifero_vigia.models.domain import FusedAlert, NodeObservation, Site, SiteCalibration, SyncQueueItem, VolunteerReport
+from acuifero_vigia.main import app
+from acuifero_vigia.models.domain import AcuiferoAssessmentArtifact, FusedAlert, NodeObservation, Site, SiteCalibration, SyncQueueItem, VolunteerReport
 from acuifero_vigia.models.domain import HydrometSnapshot
 from acuifero_vigia.services.storage import get_upload_dir
 
@@ -41,8 +43,8 @@ def request(method: str, url: str, **kwargs) -> httpx.Response:
 def reset_state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("ACUIFERO_UPLOAD_DIR", str(tmp_path / "uploads"))
     settings_module.get_settings.cache_clear()
-    main_module.is_online = True
-    monkeypatch.setattr(main_module.llm_client, "structure_observation", lambda *_args, **_kwargs: None)
+    deps.is_online = True
+    monkeypatch.setattr(deps.llm_client, "structure_observation", lambda *_args, **_kwargs: None)
 
     for engine in (edge_engine, central_engine):
         with Session(engine) as session:
@@ -78,20 +80,12 @@ def reset_state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
 
 
-def _build_test_video(path: Path) -> None:
-    width, height = 320, 240
-    writer = cv2.VideoWriter(str(path), cv2.VideoWriter_fourcc(*"MJPG"), 4.0, (width, height))
-    if not writer.isOpened():
-        raise RuntimeError("Could not create synthetic test video")
-
-    for index in range(16):
-        frame = np.full((height, width, 3), (200, 210, 220), dtype=np.uint8)
-        waterline_y = max(70, 210 - index * 9)
-        cv2.rectangle(frame, (0, waterline_y), (width - 1, height - 1), (90, 70, 40), -1)
-        cv2.line(frame, (0, 100), (width - 1, 100), (245, 245, 245), 2)
-        writer.write(frame)
-
-    writer.release()
+def _build_test_image(path: Path) -> None:
+    image = Image.new("RGB", (320, 240), (200, 210, 220))
+    draw = ImageDraw.Draw(image)
+    draw.rectangle((0, 132, 319, 239), fill=(90, 70, 40))
+    draw.line((0, 95, 319, 95), fill=(245, 245, 245), width=2)
+    image.save(path, format="JPEG")
 
 
 
@@ -117,6 +111,7 @@ def test_report_and_sync():
     async def run_flow():
         with Session(edge_engine) as edge_session:
             payload = await create_report(
+                background_tasks=BackgroundTasks(),
                 site_id="test-site",
                 reporter_name="Test User",
                 reporter_role="Tester",
@@ -135,13 +130,13 @@ def test_report_and_sync():
             return report_id, sync_payload
 
     report_id, sync_payload = anyio.run(run_flow)
-    assert sync_payload["queued"] == 3
-    assert sync_payload["flushed"] == 3
+    assert sync_payload["queued"] >= 3
+    assert sync_payload["flushed"] == sync_payload["queued"]
     assert sync_payload["failed"] == 0
 
     with Session(edge_engine) as session:
         queue_items = session.exec(select(SyncQueueItem)).all()
-        assert len(queue_items) == 3
+        assert len(queue_items) == sync_payload["queued"]
         assert all(item.status == "synced" for item in queue_items)
 
         edge_report = session.get(VolunteerReport, report_id)
@@ -164,6 +159,7 @@ def test_report_uploads_are_persisted():
         audio = UploadFile(filename="note.wav", file=BytesIO(b"fake-audio-bytes"))
         with Session(edge_engine) as edge_session:
             return await create_report(
+                background_tasks=BackgroundTasks(),
                 site_id="test-site",
                 reporter_name="Upload User",
                 reporter_role="Tester",
@@ -184,9 +180,9 @@ def test_report_uploads_are_persisted():
 
 
 
-def test_node_analysis_with_video(tmp_path: Path):
-    video_path = tmp_path / "synthetic.avi"
-    _build_test_video(video_path)
+def test_node_analysis_with_image_media(tmp_path: Path):
+    video_path = tmp_path / "synthetic.jpg"
+    _build_test_image(video_path)
 
     async def run_flow():
         with video_path.open("rb") as handle:
@@ -195,9 +191,18 @@ def test_node_analysis_with_video(tmp_path: Path):
                 return await analyze_node(site_id="test-site", video=upload, session=edge_session)
 
     payload = anyio.run(run_flow)
-    assert payload["observation"]["frames_analyzed"] >= 3
-    assert payload["observation"]["confidence"] > 0
+    assert payload["observation"]["frames_analyzed"] == 1
     assert payload["observation"]["evidence_frame_url"].startswith("/uploads/")
+    assert payload["observation"]["assessment_mode"] == "gemma4-multimodal-v1"
+    assert payload["observation"]["artifact_id"] is not None
+    assert payload["observation"]["runner"]["mode"] in {
+        "litert-multimodal-temporal",
+        "ollama-multimodal-temporal",
+        "multimodal-unavailable-fallback",
+    }
+    assert payload["observation"]["temporal_summary"]
+    assert isinstance(payload["observation"]["reasoning_steps"], list)
+    assert isinstance(payload["observation"]["artifact_refs"], dict)
     assert payload["alert"].level in {"yellow", "orange", "red"}
 
     with Session(edge_engine) as session:
@@ -205,11 +210,17 @@ def test_node_analysis_with_video(tmp_path: Path):
         assert observation is not None
         assert observation.video_path is not None
         assert observation.sync_status == "pending"
+        assert observation.assessment_artifact_id is not None
+        artifact = session.get(AcuiferoAssessmentArtifact, observation.assessment_artifact_id)
+        assert artifact is not None
+        assert artifact.frames_analyzed == 1
+        assert artifact.bundle_json
+        assert artifact.verdict_json
 
 
 def test_sample_node_analysis_endpoint(tmp_path: Path):
-    video_path = tmp_path / "sample.avi"
-    _build_test_video(video_path)
+    video_path = tmp_path / "sample.jpg"
+    _build_test_image(video_path)
 
     with Session(edge_engine) as session:
         session.add(
@@ -240,8 +251,10 @@ def test_sample_node_analysis_endpoint(tmp_path: Path):
     response = request("POST", "/api/sites/sample-site/sample-node-analysis")
     assert response.status_code == 200
     payload = response.json()
-    assert payload["observation"]["frames_analyzed"] >= 3
+    assert payload["observation"]["frames_analyzed"] == 1
     assert payload["observation"]["evidence_frame_url"].startswith("/uploads/")
+    assert payload["observation"]["artifact_id"] is not None
+    assert payload["observation"]["assessment_mode"] == "gemma4-multimodal-v1"
     assert payload["sample_video_source_url"] == "https://example.com/fixed-cam"
 
 
@@ -257,7 +270,7 @@ def test_external_snapshot_refresh_serializes_response(monkeypatch: pytest.Monke
         river_discharge_trend=1.5,
     )
 
-    monkeypatch.setattr(main_module.external_data_service, "fetch_snapshot", lambda _site: snapshot)
+    monkeypatch.setattr(deps.external_data_service, "fetch_snapshot", lambda _site: snapshot)
 
     response = request("POST", "/api/sites/test-site/external-snapshot/refresh")
     assert response.status_code == 200

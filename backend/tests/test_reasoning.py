@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 import anyio
-import pytest
+from fastapi import BackgroundTasks
 from sqlmodel import Session
 
-from acuifero_vigia import main as main_module
+from acuifero_vigia.api.routers.alerts import get_alert
+from acuifero_vigia.api.routers.vigia import create_report
 from acuifero_vigia.db.database import edge_engine
-from acuifero_vigia.main import create_report, get_alert
 from acuifero_vigia.services.reasoning import (
-    ReasoningBlock,
     deserialize_chain,
     generate_alert_reasoning,
     serialize_chain,
@@ -82,6 +81,26 @@ def test_reasoning_uses_llm_output():
     assert len(block.llm_chain_of_thought) == 3
 
 
+def test_reasoning_uses_runtime_model_name_property():
+    class FakeRuntime:
+        model_name = "gemma-4-E2B-it.litertlm"
+
+        def generate_text(self, *a, **k):
+            return "Se emite amarillo por waterline_ratio=0.52 y trend=rising.\nCadena: mirar ratio -> confirmar tendencia -> escalar"
+
+    block = generate_alert_reasoning(
+        level="yellow",
+        fused_score=0.52,
+        node_obs={"waterline_ratio": 0.52, "rise_velocity": 0.08, "crossed_critical_line": False, "confidence": 0.76},
+        volunteer_parsed={"water_level_category": "medium", "trend": "rising", "road_status": "caution", "bridge_status": "unknown", "urgency": "normal", "summary": "x"},
+        hydromet=None,
+        rules_fired=["node=0.52", "volunteer=0.50"],
+        llm=FakeRuntime(),
+    )
+    assert block.model_name == "gemma-4-E2B-it.litertlm"
+    assert len(block.llm_chain_of_thought) == 3
+
+
 def test_chain_roundtrip():
     chain = ["uno", "dos", "tres"]
     assert deserialize_chain(serialize_chain(chain)) == chain
@@ -93,6 +112,7 @@ def test_alert_persists_reasoning_fields():
     async def run():
         with Session(edge_engine) as s:
             payload = await create_report(
+                background_tasks=BackgroundTasks(),
                 site_id="test-site",
                 reporter_name="t",
                 reporter_role="t",

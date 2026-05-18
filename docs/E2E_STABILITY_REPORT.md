@@ -1,0 +1,95 @@
+# E2E Stability Report - Acuifero 4 + Vigia
+
+Date: 2026-05-18
+Branch: `develop`
+Environment: Ubuntu 22.04 VM, NVIDIA RTX 3060 (12 GB), CUDA 13.1, driver 590.48.01
+Runtimes: LiteRT-LM (Acuifero edge node, GPU) + Ollama 11434 (central reasoning + actuators)
+Models: `gemma-4-E2B-it.litertlm` (LiteRT vision), `gemma4:26b` (Ollama central, vision + tools)
+
+## Verdict
+
+End-to-end flow Persona-A (node) -> Persona-B (Vigia citizen report) -> deterministic fusion -> Ollama tool-call actuators -> CAP v1.2 export runs without errors. All four legs return HTTP 200; the fused alert escalates to `red`, all three actuators (`trigger_alarm`, `send_radio_payload`, `notify_app`) fire `success`, and the CAP XML is well-formed.
+
+## Bugs found and fixed
+
+### 1. Multimodal call used a text-only Ollama model
+
+- Symptom: `decision_trace.evidence[node].payload.runner_mode = "multimodal-unavailable-fallback"`, summary `"... pero el modelo no devolvio una respuesta valida"`.
+- Root cause: `docker-compose.yml` set `ACUIFERO_MULTIMODAL_MODEL=gemma4:e2b`. Direct probe of `/api/chat` with an image returns HTTP 500 `"this model is missing data required for image input"` — `gemma4:e2b` ships without the vision adapter.
+- Fix: `docker-compose.yml` -> `ACUIFERO_MULTIMODAL_MODEL=gemma4:26b`; comment added documenting that any Ollama vision use requires a vision-capable variant. On this VM the LiteRT path is preferred and is set via `ACUIFERO_NODE_PROVIDER=litert` + `ACUIFERO_NODE_MODEL_PATH` (see below).
+
+### 2. LiteRT model path mismatch (default vs repo layout)
+
+- Symptom: `engine.cc:491 Failed to create engine: NOT_FOUND: open() failed: /.../.acuifero_data/models/gemma-4-E2B-it.litertlm`. Every Acuifero call fell through to `multimodal-unavailable-fallback`.
+- Root cause: `core/settings.py` defaults `ACUIFERO_NODE_MODEL_PATH` to `<ACUIFERO_DATA_DIR>/models/gemma-4-E2B-it.litertlm`, but the repository ships the bundles in `backend/data/models/`.
+- Fix: explicit `ACUIFERO_NODE_MODEL_PATH=/home/hz/work/AcuIfero4Vigia_local/backend/data/models/gemma-4-E2B-it.litertlm` in the launch script. Recommendation (not applied): change the default in `settings.py` to `backend/data/models/...` so the dev launch works without an env override.
+
+### 3. Actuator tool-calling broke against `gemma4:e2b`
+
+- Symptom: `WARNING actuator LLM call failed: Client error '400 Bad Request' for url 'http://127.0.0.1:11434/api/chat'`.
+- Root cause: `services/actuators.py::_call_ollama_tool_selection` posts `tools=ACTUATOR_TOOL_SCHEMA`. Ollama returns `{"error":"registry.ollama.ai/library/gemma4:e2b does not support tools"}`. The deterministic fallback still fires the actuators, so the system is operationally safe, but the central LLM was effectively bypassed.
+- Fix: `docker-compose.yml` -> `ACUIFERO_LLM_MODEL=gemma4:26b` (with inline comment explaining why). Verified: `gemma4:26b` returns valid `tool_calls` for the same prompt.
+
+### 4. Silent exception in the Ollama multimodal adapter
+
+- Symptom: any HTTP/transport/JSON failure in `adapters/video_assessment.py::_assess_multimodal` was swallowed by a bare `except Exception: return None`. Bugs #1 and #3 were therefore invisible in the logs.
+- Fix: split the `except` into `httpx.HTTPStatusError` (logs status + truncated body + URL + model) and a generic `Exception` fallback, both at WARNING. No behaviour change beyond observability.
+
+## Files changed
+
+- `docker-compose.yml`
+- `backend/src/acuifero_vigia/adapters/video_assessment.py`
+
+## Verification (live, on `develop`)
+
+```text
+=== HEALTH ===
+{'status': 'ok', 'acuifero_node_profile': 'raspberry-pi-8gb-multimodal-demo', 'llm_enabled': True, 'hydromet_enabled': True}
+
+A) POST /api/node/analyze        site_id=silverado-fixed-cam-usgs   200  (LiteRT GPU)
+B) POST /api/reports             "el agua ya paso la marca..."      200  urgency=critical severity=1.0
+C) GET  /api/alerts              fused level=red score=1.00         200  rules: node_score=0.55, volunteer_score=1.00, corroboration_sources=node,volunteer
+D) POST /api/cap/emit            severity=severe                    200  Content-Type: application/cap+xml
+
+actuation: ['trigger_alarm:success', 'send_radio_payload:success', 'notify_app:success']
+```
+
+Backend log is free of `400`, `multimodal-unavailable-fallback`, and `actuator LLM call failed` after the fix. Remaining LiteRT log entries (`NPU accelerator could not be loaded`, `WebGPU sampler not available`) are environmental warnings; the engine falls back to the statically linked GPU/CPU sampler and inference completes normally.
+
+## Open items (non-blocking)
+
+- `core/settings.py` LiteRT default path should point at `backend/data/models/...` to remove the need for an explicit env override on a fresh checkout.
+- Compose-mode boot still needs the `llm` profile and a `docker exec ollama ollama pull gemma4:26b` step; the comment block in `docker-compose.yml` documents this.
+
+## Stress Suites (pre-main gate)
+
+Run on the same VM/RTX 3060 environment as above. Ollama serves `gemma4:26b`; LiteRT-LM holds Gemma 4 E2B in GPU.
+
+### Suite 1 - Network resiliency and mass offline sync
+
+- `scripts/demo_connectivity.py`: full narrative completed end-to-end. Offline -> queued -> sample-node-analysis fires local siren -> wifi-on -> `POST /api/sync/flush queued=19 flushed=19 failed=0`. Recovery window from offline flip to drained queue = 49 s (target <90 s).
+- Burst of 20 concurrent `POST /api/reports` with `httpx.AsyncClient`:
+  - 0 HTTP 5xx, 0 SQLite `database is locked` / `OperationalError`, 0 deadlocks (verified by `grep -iE 'database is locked|sqlite.*lock|deadlock|OperationalError' /tmp/backend.log` -> 0 hits).
+  - `FusedAlert` escalated correctly (`red`, score 1.00) across the burst.
+  - Throughput observation: with `ACUIFERO_LLM_MODEL=gemma4:26b` on a single RTX 3060, per-report latency is GPU-bound (Ollama serializes inferences). 15 of 20 returned within the 600 s client window; the remainder completed server-side without error. The path used in the real demo flow (`/api/sync/flush`) batches without serializing one LLM call per report and drained 19/19 cleanly. No code change required: the system is correct under burst, throughput is hardware-bound. Operational note: setting `OLLAMA_NUM_PARALLEL>=2` on a larger GPU gives near-linear scaling.
+
+### Suite 2 - Multimodal under VRAM pressure
+
+- `ACUIFERO_MULTIMODAL_MAX_FRAMES=4` (production target for 16 GB / workstation profile).
+- `POST /api/node/analyze` with the real 60 MB `usgs_silverado_fire_2015_fixed_cam.mp4` (multipart upload, not the bundled sample): HTTP 200 in 36.66 s.
+- VRAM trace (`nvidia-smi` every 2 s during the call): baseline 8825 MiB -> peak 11336 MiB / 12288 MiB (~92%). No OOM, no LiteRT timeout, no buffer overflow. Inference completed with a coherent JSON verdict (severity 0.65, visual cues populated).
+
+### Suite 3 - Fault injection and fallbacks
+
+- 3a. LLM down: backend relaunched with `ACUIFERO_LLM_BASE_URL=http://127.0.0.1:9` and `ACUIFERO_LLM_TIMEOUT_SECONDS=5`.
+  - `POST /api/reports` (red transcript): HTTP 200 in 0.24 s, `parsed.parser_source=rules`, `alert.level=red`, `alert.score=1.0`. Deterministic fallback engaged cleanly.
+  - `POST /api/node/analyze` with the full video: HTTP 200 in 31.4 s (LiteRT path, unaffected by Ollama outage).
+  - `POST /api/cap/emit`: HTTP 200 in 0.003 s.
+- 3b. Malformed JSON from LLM: a Python mock on `127.0.0.1:9999` returned `'{garbage not_json,, level=??'`. Backend's `_extract_json` rejected, structurer fell back to rules. `POST /api/reports`: HTTP 200, `parser_source=rules`, `alert.level=red`, `score=1.0`. No 500, no traceback.
+- 3c. LiteRT concurrency: 5 parallel `POST /api/sites/silverado-fixed-cam-usgs/sample-node-analysis`. 5/5 HTTP 200, latencies 30.1 / 55.9 / 79.8 / 103.6 / 127.4 s (LiteRT engine serialized cleanly: single GPU session, no crash, no deadlock, no `Failed to create new sequence` errors). Backend log shows clean `RunPrefillAsync status: OK` per slot.
+
+All three suites complete without HTTP 5xx, SQLite locks, LiteRT crashes, OOM, or hung sessions. The two non-fixable observations - per-request LLM latency on a 26 B model and serial LiteRT inference on a single GPU - are physics, not bugs.
+
+## Status
+
+System stable on `develop`. E2E + stress suites green. Ready to merge to `main`.

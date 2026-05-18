@@ -17,14 +17,14 @@ Path: `datasets/rioplatense_hydro/corpus.jsonl` — 82 labeled examples.
 | Name | Implementation | Runs on |
 |---|---|---|
 | rules | `services.report_structuring._fallback_parse` | CPU, no model |
-| fewshot | `GemmaFewShotTextStructurer` → Gemma via Ollama | local GPU/CPU |
+| fewshot | `GemmaFewShotTextStructurer` → Gemma-compatible local dev endpoint | local GPU/CPU |
 | openai | `gpt-4o-mini` via REST API (reference) | cloud |
 
 ## Benchmark (held-out test split, 15 examples)
 
 Run: `PYTHONPATH=backend/src python3 scripts/eval_rioplatense.py all`.
 
-Results on the dev machine (2026-04-20, Ryzen 5 7530U):
+Results from a development run on 2026-04-20:
 
 ### rules (baseline — no LLM)
 
@@ -37,10 +37,10 @@ urgency:              33.33%
 mean:                 45.33%
 ```
 
-### fewshot (Gemma 4 E2B via local Ollama)
+### fewshot (Gemma 4 E2B via local dev endpoint)
 
-Exact numbers require live Ollama. On dev machine with `gemma4:e2b` warm, we
-observed:
+Exact numbers require a live Gemma-compatible development endpoint. With
+`gemma4:e2b` warm, we observed:
 
 ```
 water_level_category: 80-87%
@@ -81,7 +81,7 @@ spots: `road_status=caution` vs `blocked` disagreements, and
 
 ## LoRA (stretch)
 
-Not attempted this cycle (8 GB RAM, no CUDA on dev machine). Would target
+Not attempted this cycle on the available development hardware. Would target
 rank 16 / alpha 32 on ~40 train examples, evaluated against the same test
 split. Documented as future work; production code does not depend on LoRA.
 
@@ -89,8 +89,9 @@ split. Documented as future work; production code does not depend on LoRA.
 
 `backend/src/acuifero_vigia/main.py` now injects
 `GemmaFewShotTextStructurer(llm_client)` into `structure_report`, so every
-`/api/reports` POST uses the few-shot prompt when Ollama is reachable and
-falls back to `_fallback_parse` otherwise. No config change required.
+`/api/reports` POST uses the few-shot prompt when the configured development
+Gemma endpoint is reachable and falls back to `_fallback_parse` otherwise. No
+config change required.
 
 ## Tests
 
