@@ -12,6 +12,7 @@ from acuifero_vigia.db.database import get_session
 from acuifero_vigia.models.domain import ActuationRecord, FusedAlert, HydrometSnapshot, Incident, NodeObservation, ParsedObservation, Site, SyncQueueItem, VolunteerReport
 from acuifero_vigia.schemas.api import RecomputeRequest
 from acuifero_vigia.services.decision_engine import recompute_site_alert
+from acuifero_vigia.services.historical_context import render_historical_context, retrieve_historical_context
 
 
 router = APIRouter(tags=["alerts"])
@@ -43,9 +44,42 @@ def _enqueue_decision_side_effects(session: Session, alert: FusedAlert) -> None:
         enqueue_entity(session, "actuation_record", record)
 
 
+def _alert_payload(alert: FusedAlert, *, include_historical_context: bool = False) -> dict[str, Any]:
+    payload = alert.model_dump(mode="json")
+    if not include_historical_context:
+        return payload
+    trace = _parsed_json(alert.decision_trace, {})
+    if not isinstance(trace, dict):
+        trace = {"legacy_trace": trace}
+    current_level = None
+    evidence = trace.get("evidence")
+    if isinstance(evidence, list):
+        for event in evidence:
+            if isinstance(event, dict) and event.get("source") == "node":
+                event_payload = event.get("payload")
+                if isinstance(event_payload, dict):
+                    current_level = event_payload.get("waterline_ratio")
+                    break
+    hits = retrieve_historical_context(alert.site_id, current_level=float(current_level or 0.0))
+    trace["historical_context"] = {
+        "enabled": True,
+        "mode": "edge-rag-sqlite",
+        "hits": [hit.__dict__ for hit in hits],
+    }
+    context = render_historical_context(hits)
+    if context:
+        payload["reasoning_summary"] = f"{payload.get('reasoning_summary') or alert.summary} Historical context: {context[:180]}"
+    payload["decision_trace"] = json.dumps(trace, ensure_ascii=True)
+    return payload
+
+
 @router.get("/alerts")
-async def get_alerts(session: Session = Depends(get_session)) -> list[FusedAlert]:
-    return session.exec(select(FusedAlert).order_by(FusedAlert.created_at.desc())).all()
+async def get_alerts(
+    historical_context: bool = Query(default=False),
+    session: Session = Depends(get_session),
+) -> list[dict[str, Any]]:
+    alerts = session.exec(select(FusedAlert).order_by(FusedAlert.created_at.desc())).all()
+    return [_alert_payload(alert, include_historical_context=historical_context) for alert in alerts]
 
 
 @router.get("/alerts/{alert_id}")
@@ -247,7 +281,12 @@ async def recompute_alerts(
     site_ids = [payload.site_id] if payload.site_id else [site.id for site in session.exec(select(Site)).all()]
     results: list[dict[str, object]] = []
     for site_id in site_ids:
-        alert = recompute_site_alert(session, site_id, acuifero_node_runtime)
+        alert = recompute_site_alert(
+            session,
+            site_id,
+            acuifero_node_runtime,
+            use_historical_context=payload.use_historical_context,
+        )
         session.flush()
         enqueue_entity(session, "fused_alert", alert)
         _enqueue_decision_side_effects(session, alert)
