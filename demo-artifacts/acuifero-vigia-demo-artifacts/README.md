@@ -31,7 +31,7 @@ acuifero-vigia-demo-artifacts/
     acuifero-dashboard-demo.zip - static dashboard build
 
   config/                    - everything needed to prove the run is real
-    model_config.json        - Gemma 4 model + runtime
+    model_config.json        - Gemma 4 three-tier model setup (E4B node / E2B mobile / 26B-A4B central)
     thresholds.json          - water-level / severity thresholds
     runtime_config.yaml      - node + backend runtime config
     lite_rt_config.json      - on-device LiteRT config
@@ -54,8 +54,11 @@ See `DEMO.md`. Two paths:
 
 ## Notes
 
-- Gemma 4 weights are **not** bundled. The project uses official Gemma 4 weights
-  via LiteRT / Ollama / llama.cpp (see `config/model_config.json`). The package
-  ships configuration and prompts only.
+- Gemma 4 weights are **not** bundled. The system runs three Gemma 4 variants,
+  one per tier (see `config/model_config.json`):
+  - `google/gemma-4-E4B-it` on the Acuífero Raspberry Pi camera node (LiteRT, int4)
+  - `google/gemma-4-E2B-it` on the Vigía Android app (LiteRT, int4)
+  - `google/gemma-4-26B-A4B-it` on the central server (Ollama, q4_K_M)
+  The package ships configuration and prompts only.
 - All inputs are real captures from the Acuífero node and Vigía app, not
   synthetic. Filenames map 1:1 to entries in `manifest.json`.
