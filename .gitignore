@@ -72,6 +72,8 @@ tools/
 tools/ollama/
 fixtures/media/
 fixtures/frames/
+!fixtures/kaggle_live_demo/
+!fixtures/kaggle_live_demo/**
 outputs/
 screenshots/
 datasets/raw/
