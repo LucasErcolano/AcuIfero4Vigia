@@ -1,6 +1,6 @@
 {
   "runtime": "LiteRT",
-  "model_path": "/opt/acuifero/models/gemma-3-4b-it-int4.litert",
+  "model_path": "/opt/acuifero/models/gemma-4-4b-it-int4.litert",
   "delegate": "xnnpack",
   "num_threads": 4,
   "quantization": "int4",

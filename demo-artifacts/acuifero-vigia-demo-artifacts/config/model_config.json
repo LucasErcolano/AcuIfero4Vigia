@@ -1,10 +1,10 @@
 {
   "model": {
-    "name": "google/gemma-3-4b-it",
+    "name": "google/gemma-4-4b-it",
     "family": "Gemma 4",
     "size_params_b": 4,
     "weights_bundled": false,
-    "weights_source": "https://huggingface.co/google/gemma-3-4b-it",
+    "weights_source": "https://huggingface.co/google/gemma-4-4b-it",
     "license": "Gemma Terms of Use",
     "fine_tuned": false,
     "adapters": []
