@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
 set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+
 pkill -f "uvicorn acuifero_vigia.main:app" 2>/dev/null || true
 sleep 2
-cd /home/hz/work/AcuIfero4Vigia_local/backend
+cd "${REPO_ROOT}/backend"
 mkdir -p data
 rm -f data/edge.db data/central.db data/acuifero.db
 PYTHONPATH=src python3 -m acuifero_vigia.scripts.seed
@@ -12,10 +16,10 @@ echo "---health---"
 curl -sS http://127.0.0.1:8000/api/health || curl -sS http://127.0.0.1:8000/api/runtime/health || echo no_health
 echo ""
 echo "---ACTO 1 verde---"
-bash /home/hz/work/AcuIfero4Vigia_local/scripts/demo_persona_c/01_vigia_verde.sh
+bash "${SCRIPT_DIR}/01_vigia_verde.sh"
 sleep 2
 echo "---ACTO 2 amarillo---"
-bash /home/hz/work/AcuIfero4Vigia_local/scripts/demo_persona_c/02_acuifero_amarillo.sh
+bash "${SCRIPT_DIR}/02_acuifero_amarillo.sh"
 sleep 2
 echo "---ACTO 3 rojo---"
-bash /home/hz/work/AcuIfero4Vigia_local/scripts/demo_persona_c/03_fusion_rojo.sh
+bash "${SCRIPT_DIR}/03_fusion_rojo.sh"

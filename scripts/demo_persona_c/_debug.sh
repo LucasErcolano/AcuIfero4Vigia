@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -e
-cd /home/hz/work/AcuIfero4Vigia_local/backend
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+
+cd "${REPO_ROOT}/backend"
 pkill -f uvicorn 2>/dev/null || true
 sleep 2
 rm -f data/acuifero.db

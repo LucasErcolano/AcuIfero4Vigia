@@ -4,8 +4,8 @@ Launches Chromium headless at 1440x900, opens the operator dashboard, and fires
 the 3 actos via direct HTTP calls to the backend. Records a webm of the entire
 session. Convert to mp4 in post with ffmpeg if needed.
 
-Usage on VM:
-  cd /home/hz/work/AcuIfero4Vigia_local/scripts/demo_persona_c
+Usage:
+  cd "$(git rev-parse --show-toplevel)"/scripts/demo_persona_c
   bash 00_reset.sh
   python3 record_demo.py --out /tmp/persona_c_demo.webm
 """

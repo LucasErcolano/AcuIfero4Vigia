@@ -22,7 +22,7 @@ End-to-end flow Persona-A (node) -> Persona-B (Vigia citizen report) -> determin
 
 - Symptom: `engine.cc:491 Failed to create engine: NOT_FOUND: open() failed: /.../.acuifero_data/models/gemma-4-E2B-it.litertlm`. Every Acuifero call fell through to `multimodal-unavailable-fallback`.
 - Root cause: `core/settings.py` defaults `ACUIFERO_NODE_MODEL_PATH` to `<ACUIFERO_DATA_DIR>/models/gemma-4-E2B-it.litertlm`, but the repository ships the bundles in `backend/data/models/`.
-- Fix: explicit `ACUIFERO_NODE_MODEL_PATH=/home/hz/work/AcuIfero4Vigia_local/backend/data/models/gemma-4-E2B-it.litertlm` in the launch script. Recommendation (not applied): change the default in `settings.py` to `backend/data/models/...` so the dev launch works without an env override.
+- Fix: set `ACUIFERO_NODE_MODEL_PATH=<repo>/backend/data/models/gemma-4-E2B-it.litertlm` explicitly in the launch script (this is where `scripts/fetch_litert_model.py` writes the artifact). Recommendation (not applied): change the default in `settings.py` to `backend/data/models/...` so the dev launch works without an env override.
 
 ### 3. Actuator tool-calling broke against `gemma4:e2b`
 

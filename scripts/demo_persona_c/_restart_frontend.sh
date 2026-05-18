@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -e
-cd /home/hz/work/AcuIfero4Vigia_local/frontend
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+
+cd "${REPO_ROOT}/frontend"
 pkill -f vite 2>/dev/null || true
 pkill -f "npm run dev" 2>/dev/null || true
 sleep 2

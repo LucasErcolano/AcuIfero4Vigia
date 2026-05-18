@@ -100,6 +100,7 @@ Thumbs.db
 # --- Internal / outreach (PII, contacts, cookies) ---
 docs/internal/
 docs/outreach/
+scripts/send_*outreach*.py
 
 # --- Designer source bundles ---
 # .design_pkg/ stays tracked as the canonical brand reference. Block
