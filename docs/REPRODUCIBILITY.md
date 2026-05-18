@@ -8,7 +8,11 @@ Exact versions, commands, hardware, and expected outputs to verify the prototype
 - Node: 20 LTS (frontend Vite + TS)
 - Android: SDK 34, Kotlin 1.9, Compose BOM 2024.06
 - Ollama: 0.3.x (Gemma 4 multimodal support)
-- Models: `gemma4:e2b`, optional `gemma4:e4b`; Android: Gemma 3n E2B `.task`
+- System: `ffmpeg` available on PATH (frame extraction for `fetch_demo_assets.py`)
+- Models (three-tier Gemma 4 setup, see [GEMMA_USAGE.md](GEMMA_USAGE.md)):
+  - Acuifero Pi node: `google/gemma-4-E4B-it` (LiteRT, int4) — fits 16GB Pi / workstation profile
+  - Vigia Android: `google/gemma-4-E2B-it` (LiteRT, int4) — `.litertlm` artifact in app `filesDir`
+  - Central server: `gemma4:26b` via Ollama (q4_K_M, vision + tools capable) — used by docker-compose
 - OS tested: Ubuntu 22.04, Windows 11 (WSL2), Raspberry Pi OS Bookworm 64-bit
 
 ## Hardware tested
@@ -29,10 +33,16 @@ Full Pi setup: [`docs/raspberry-pi-acuifero-node.md`](raspberry-pi-acuifero-node
 ```bash
 cp .env.example .env
 docker compose --profile llm up -d
-docker exec acuifero-ollama ollama pull gemma4:e2b
+# Pull the central-tier model used by docker-compose (vision + tools capable).
+# E2B is text-only and rejects /api/chat tools; do not use it for the docker stack.
+docker exec acuifero-ollama ollama pull gemma4:26b
 curl -s http://localhost:8000/health
 # expected: {"status":"ok", ...}
 ```
+
+For a lighter text-only local run (no docker, no multimodal), `ollama pull gemma4:e2b`
+plus `ACUIFERO_LLM_MODEL=gemma4:e2b` is enough. See `docker-compose.yml` header for
+the exact constraints per slug.
 
 ### End-to-end demo
 
@@ -61,7 +71,7 @@ python scripts/eval_rioplatense.py
 ### LiteRT-LM benchmark (Pi 8GB)
 
 ```bash
-bash scripts/install_litert.sh   # if present, otherwise see scripts/fetch_litert_model.py
+python scripts/fetch_litert_model.py     # downloads gemma-4-E2B-it.litertlm to backend/data/models/
 python scripts/litert_smoke.py
 python scripts/litert_benchmark.py
 # expected: jsonl output matching docs/hackathon/litert-e2b-pi5-8gb-*.jsonl
@@ -72,8 +82,11 @@ python scripts/litert_benchmark.py
 ```bash
 cd android
 ./gradlew :app:assembleDebug
-# install .apk on device with >=6GB RAM; place Gemma 3n .task per android/README
-# BenchActivity prints decode tokens/s and first-token latency
+# Install .apk on a device with >=6GB RAM. The on-device LLM expects
+# `gemma-4-E2B-it.litertlm` (the same artifact downloaded by
+# scripts/fetch_litert_model.py) under the app's internal files dir.
+# See android/README.md for the exact placement (adb push path) and verification.
+# BenchActivity prints decode tokens/s and first-token latency.
 ```
 
 ### Backend tests

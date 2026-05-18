@@ -2,15 +2,18 @@
 
 Concrete map of where Gemma 4 runs in this repo, which runtime is used, and how to verify it.
 
-## Models
+## Models (three-tier setup)
 
-| Variant | Where | Runtime |
-|---|---|---|
-| `gemma4:e2b` (multimodal) | Backend (Acuifero node assessment, Vigia text structuring) | Ollama (dev), LiteRT-LM (edge target) |
-| `gemma4:e4b` | Backend reasoning (optional, workstation/Pi 16GB) | Ollama |
-| Gemma 3n E2B (`.task`) | Android Vigia app | MediaPipe LLM Inference |
+| Tier | Variant | Where | Runtime | Notes |
+|---|---|---|---|---|
+| Acuifero Pi node | `google/gemma-4-E4B-it` | LiteRT artifact on Pi 16GB / workstation | LiteRT-LM | Multimodal temporal assessment |
+| Vigia Android | `google/gemma-4-E2B-it` | `gemma-4-E2B-it.litertlm` in app `filesDir` | LiteRT (MediaPipe LLM Inference wrapper) | Text + audio transcript fusion |
+| Central server | `gemma4:26b` (Ollama tag for 26B-A4B q4_K_M) | Backend docker / workstation | Ollama | Vision + tools, alert reasoning + actuator dispatch |
+| (local light dev) | `gemma4:e2b` | Local Ollama, text-only experiments | Ollama | Text-only; rejects `/api/chat` tools |
 
-Selection lives in [`backend/src/acuifero_vigia/core/settings.py`](../backend/src/acuifero_vigia/core/settings.py) (env vars `GEMMA_MODEL`, `GEMMA_RUNTIME`, `OLLAMA_HOST`).
+Selection lives in [`backend/src/acuifero_vigia/core/settings.py`](../backend/src/acuifero_vigia/core/settings.py) (env vars `ACUIFERO_LLM_MODEL`, `ACUIFERO_MULTIMODAL_MODEL`, `ACUIFERO_NODE_PROVIDER`).
+
+The full hardware × tier matrix and quantization choices are in [`demo-artifacts/acuifero-vigia-demo-artifacts/config/model_config.json`](../demo-artifacts/acuifero-vigia-demo-artifacts/config/model_config.json).
 
 ## Where Gemma 4 is used
 
@@ -66,9 +69,9 @@ Selection lives in [`backend/src/acuifero_vigia/core/settings.py`](../backend/sr
 ## Verify it is not mock
 
 ```bash
-# 1. Backend hitting real Ollama
+# 1. Backend hitting real Ollama (central tier, vision + tools)
 docker compose --profile llm up
-docker exec acuifero-ollama ollama pull gemma4:e2b
+docker exec acuifero-ollama ollama pull gemma4:26b
 curl -s http://localhost:11434/api/tags | grep gemma4
 
 # 2. Acuifero assessment end-to-end (real frames)

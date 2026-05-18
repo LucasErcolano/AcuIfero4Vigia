@@ -10,6 +10,13 @@ if ! command -v uv >/dev/null 2>&1; then
   exit 1
 fi
 
+if ! command -v ffmpeg >/dev/null 2>&1; then
+  echo "ffmpeg is required (used by scripts/fetch_demo_assets.py to extract reference frames)." >&2
+  echo "  Debian/Ubuntu: sudo apt-get install -y ffmpeg" >&2
+  echo "  macOS:         brew install ffmpeg" >&2
+  exit 1
+fi
+
 cd "$BACKEND_DIR"
 if [[ ! -d .venv ]]; then
   uv venv

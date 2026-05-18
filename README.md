@@ -71,7 +71,9 @@ Stack: Gemma 4 (E2B/E4B) via Ollama and MediaPipe LLM Inference, LiteRT-LM
 cp .env.example .env
 docker compose --profile llm up
 # Backend at http://localhost:8000, Ollama at http://localhost:11434
-docker exec acuifero-ollama ollama pull gemma4:e2b
+# docker-compose.yml sets ACUIFERO_LLM_MODEL=gemma4:26b for vision + tools;
+# gemma4:e2b is text-only and rejects /api/chat tools, so pull 26b for this stack.
+docker exec acuifero-ollama ollama pull gemma4:26b
 ```
 
 For native dev per component, see the sections below.
