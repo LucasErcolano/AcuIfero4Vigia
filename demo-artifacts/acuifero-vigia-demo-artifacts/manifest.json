@@ -48,7 +48,7 @@
     "replay_results": "eval/replay_results.json"
   },
   "model": {
-    "name": "google/gemma-3-4b-it",
+    "name": "google/gemma-4-4b-it",
     "weights_bundled": false,
     "weights_source": "official Gemma release",
     "runtime": ["LiteRT", "Ollama", "llama.cpp"]

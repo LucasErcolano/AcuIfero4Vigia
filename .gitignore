@@ -83,6 +83,9 @@ datasets/raw/
 # --- Demo artifacts: keep source tree, ignore generated zips/checksums ---
 demo-artifacts/acuifero-vigia-demo-artifacts.zip
 demo-artifacts/SHA256SUMS.txt
+# Demo-artifacts outputs/screenshots are part of the package, override outputs/ rule
+!demo-artifacts/acuifero-vigia-demo-artifacts/outputs/
+!demo-artifacts/acuifero-vigia-demo-artifacts/outputs/**
 
 # --- OS / editors ---
 .codex
