@@ -1,6 +1,11 @@
 # Dev-only compose for Acuifero 4 + Vigia.
 # Brings up the FastAPI backend and an optional local Ollama runtime
-# serving Gemma 4 (E2B by default). Frontend and Android are out of scope here.
+# serving Gemma 4 (E2B for text, vision-capable variant for multimodal).
+# IMPORTANT: gemma4:e2b is text-only (no vision adapter); a vision-capable
+# variant (e.g. gemma4:26b or gemma3:4b) MUST be used for multimodal analysis,
+# otherwise Ollama returns 500 "missing data required for image input" and
+# Acuifero falls back to the deterministic OpenCV path.
+# Frontend and Android are out of scope here.
 #
 # Usage:
 #   docker compose up backend                  # backend only
@@ -21,11 +26,14 @@ services:
             ACUIFERO_DATA_DIR: /data
             ACUIFERO_LLM_ENABLED: "true"
             ACUIFERO_LLM_BASE_URL: http://ollama:11434/v1
-            ACUIFERO_LLM_MODEL: gemma4:e2b
+            # Central reasoning + actuator tool-calling. gemma4:e2b does NOT
+            # support /api/chat tools (Ollama responds 400 "does not support tools"),
+            # so use the vision-and-tools capable variant for fusion + actuators.
+            ACUIFERO_LLM_MODEL: gemma4:26b
             ACUIFERO_LLM_API_KEY: ollama
             ACUIFERO_MULTIMODAL_ENABLED: "true"
             ACUIFERO_MULTIMODAL_BASE_URL: http://ollama:11434/v1
-            ACUIFERO_MULTIMODAL_MODEL: gemma4:e2b
+            ACUIFERO_MULTIMODAL_MODEL: gemma4:26b
         volumes:
             - ./backend:/app
             - acuifero-data:/data
@@ -46,7 +54,8 @@ services:
         volumes:
             - ollama-models:/root/.ollama
         # Pull the model once after first start:
-        #   docker exec acuifero-ollama ollama pull gemma4:e2b
+        #   docker exec acuifero-ollama ollama pull gemma4:e2b   # text LLM
+        #   docker exec acuifero-ollama ollama pull gemma4:26b   # multimodal (vision)
 
 volumes:
     acuifero-data:

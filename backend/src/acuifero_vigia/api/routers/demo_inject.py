@@ -41,7 +41,7 @@ class NodeInjectRequest(BaseModel):
     rise_velocity: float = Field(default=0.04, ge=0.0)
     crossed_critical_line: bool = False
     confidence: float = Field(default=0.78, ge=0.0, le=1.0)
-    temporal_summary: str = "Camara fija: lectura sintetica inyectada para demo."
+    temporal_summary: str = "Fixed camera: synthetic reading injected for demo."
     assessment_level: str | None = None
 
 
@@ -70,7 +70,7 @@ async def inject_node_observation(
         crossed_critical_line=payload.crossed_critical_line,
         confidence=payload.confidence,
         decision_trace=json.dumps(
-            ["demo_inject: synthetic node observation for Persona C escalada"],
+            ["demo_inject: synthetic node observation for Persona C escalation"],
             ensure_ascii=True,
         ),
         severity_score=payload.severity_score,

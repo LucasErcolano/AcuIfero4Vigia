@@ -1,6 +1,7 @@
 package com.acuifero.vigia.android.data
 
 import android.content.Context
+import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -13,9 +14,8 @@ import java.io.File
 import java.nio.file.Files
 
 /**
- * Unit tests for [GemmaOnDevice]. The wrapper uses reflection to talk to
- * MediaPipe at runtime, so without a real model file at filesDir/gemma4-e2b.task
- * every entry point must short-circuit safely.
+ * Unit tests for [GemmaOnDevice]. Without a real .litertlm at filesDir
+ * every entry point must short-circuit safely instead of crashing.
  */
 class GemmaOnDeviceTest {
     private lateinit var tempDir: File
@@ -41,13 +41,13 @@ class GemmaOnDeviceTest {
     }
 
     @Test
-    fun `structureReport returns null when model file missing`() {
+    fun `structureReport returns null when model file missing`() = runBlocking {
         val gemma = GemmaOnDevice(context)
         assertNull(gemma.structureReport("hola, el agua subio"))
     }
 
     @Test
-    fun `generate returns null without crashing when model file missing`() {
+    fun `generate returns null without crashing when model file missing`() = runBlocking {
         val gemma = GemmaOnDevice(context)
         assertNull(gemma.generate("hi"))
     }
@@ -55,6 +55,9 @@ class GemmaOnDeviceTest {
     @Test
     fun `modelFile resolves under filesDir`() {
         val gemma = GemmaOnDevice(context)
-        assertEquals(File(tempDir, "gemma4-e2b.task").absolutePath, gemma.modelFile.absolutePath)
+        assertEquals(
+            File(tempDir, GemmaOnDevice.MODEL_FILE_NAME).absolutePath,
+            gemma.modelFile.absolutePath,
+        )
     }
 }

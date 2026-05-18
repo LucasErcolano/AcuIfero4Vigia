@@ -190,7 +190,7 @@ class MainViewModel(
         )
     }
 
-    fun submitReport(siteId: String, reporterName: String, reporterRole: String, transcriptText: String, forceOffline: Boolean) {
+    fun submitReport(siteId: String, reporterName: String, reporterRole: String, transcriptText: String, forceOffline: Boolean, audioWav: ByteArray? = null) {
         viewModelScope.launch {
             _siteState.value = _siteState.value.copy(isSubmitting = true, message = null, error = null)
             // On-device Gemma fast path: when a model file is present we structure
@@ -199,7 +199,7 @@ class MainViewModel(
             val gemmaInstance = gemma
             if (gemmaInstance != null && gemmaInstance.isAvailable()) {
                 runCatching {
-                    val rawJson = gemmaInstance.structureReport(transcriptText)
+                    val rawJson = gemmaInstance.structureReport(transcriptText, audioWav)
                     if (rawJson.isNullOrBlank()) {
                         null
                     } else {

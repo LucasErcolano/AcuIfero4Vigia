@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 from typing import Any
 
 import httpx
+
+_LOGGER = logging.getLogger(__name__)
 
 from acuifero_vigia.adapters.image_assessment import _encode_image
 from acuifero_vigia.adapters.litert_node import LiteRTNodeRuntime
@@ -149,7 +152,23 @@ class OllamaGemmaRunner:
             body = response.json()
             message = body.get("message", {})
             content = message.get("content") or message.get("thinking") or ""
-        except Exception:
+        except httpx.HTTPStatusError as exc:
+            body_text = exc.response.text[:300] if exc.response is not None else ""
+            _LOGGER.warning(
+                "multimodal Ollama HTTP %s for model=%s url=%s body=%s",
+                exc.response.status_code if exc.response is not None else "?",
+                self.settings.acuifero_multimodal_model,
+                self._multimodal_ollama_chat_url(),
+                body_text,
+            )
+            return None
+        except Exception as exc:
+            _LOGGER.warning(
+                "multimodal Ollama call failed model=%s url=%s err=%r",
+                self.settings.acuifero_multimodal_model,
+                self._multimodal_ollama_chat_url(),
+                exc,
+            )
             return None
 
         parsed = self.llm._extract_json(content)

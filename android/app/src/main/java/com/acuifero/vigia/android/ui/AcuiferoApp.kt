@@ -23,6 +23,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CloudUpload
+import androidx.compose.material.icons.rounded.Mic
+import androidx.compose.material.icons.rounded.MicOff
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Save
@@ -50,11 +52,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
@@ -159,8 +163,8 @@ fun AcuiferoApp(viewModel: MainViewModel) {
                         onRefreshHydromet = { viewModel.refreshSnapshot(siteId) },
                         onPickScenario = { scenario -> viewModel.runDemoScenario(siteId, scenario) },
                         onClearScenario = viewModel::clearActiveScenario,
-                        onSubmitReport = { name, role, transcript, offline ->
-                            viewModel.submitReport(siteId, name, role, transcript, offline)
+                        onSubmitReport = { name, role, transcript, offline, audio ->
+                            viewModel.submitReport(siteId, name, role, transcript, offline, audio)
                         },
                         onCalibrate = { navController.navigate("site/$siteId/calibration") },
                     )
@@ -432,7 +436,7 @@ private fun SiteDetailScreen(
     onRefreshHydromet: () -> Unit,
     onPickScenario: (DemoScenario) -> Unit,
     onClearScenario: () -> Unit,
-    onSubmitReport: (String, String, String, Boolean) -> Unit,
+    onSubmitReport: (String, String, String, Boolean, ByteArray?) -> Unit,
     onCalibrate: () -> Unit,
 ) {
     Column(
@@ -701,12 +705,17 @@ private fun HydrometCard(snapshot: com.acuifero.vigia.android.data.ExternalSnaps
 @Composable
 private fun VolunteerReportCard(
     state: SiteScreenState,
-    onSubmitReport: (String, String, String, Boolean) -> Unit,
+    onSubmitReport: (String, String, String, Boolean, ByteArray?) -> Unit,
 ) {
     var reporterName by rememberSaveable { mutableStateOf("Android Operator") }
     var reporterRole by rememberSaveable { mutableStateOf("brigade member") }
     var transcriptText by rememberSaveable { mutableStateOf("Water has already crossed the critical mark and brings mud, evacuate low zone.") }
     var saveOffline by rememberSaveable { mutableStateOf(false) }
+    val ctx = LocalContext.current
+    val recorder = remember { com.acuifero.vigia.android.data.AudioRecorder() }
+    var isRecording by remember { mutableStateOf(false) }
+    var pendingAudio by remember { mutableStateOf<ByteArray?>(null) }
+    val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
     Card(colors = CardDefaults.cardColors(containerColor = DemoPalette.SurfaceCard)) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("Volunteer report", fontWeight = FontWeight.SemiBold, color = DemoPalette.Ink, style = MaterialTheme.typography.titleSmall)
@@ -714,12 +723,45 @@ private fun VolunteerReportCard(
             OutlinedTextField(value = reporterRole, onValueChange = { reporterRole = it }, label = { Text("Role") }, modifier = Modifier.fillMaxWidth())
             OutlinedTextField(value = transcriptText, onValueChange = { transcriptText = it }, label = { Text("Transcript") }, modifier = Modifier.fillMaxWidth(), minLines = 3)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Button(
+                    onClick = {
+                        if (!isRecording) {
+                            recorder.start()
+                            isRecording = true
+                            pendingAudio = null
+                        } else {
+                            isRecording = false
+                            coroutineScope.launch {
+                                val wav = recorder.stopAndBuildWav()
+                                pendingAudio = wav
+                                if (wav != null) {
+                                    runCatching {
+                                        java.io.File(ctx.cacheDir, "last_recording.wav").writeBytes(wav)
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (isRecording) Color(0xFFB91C1C) else DemoPalette.River,
+                    ),
+                ) {
+                    Icon(if (isRecording) Icons.Rounded.MicOff else Icons.Rounded.Mic, contentDescription = null)
+                    Spacer(Modifier.width(6.dp))
+                    Text(if (isRecording) "Stop" else "Record audio")
+                }
+                pendingAudio?.let { Text("audio ${it.size / 1024} KB", style = MaterialTheme.typography.bodySmall, color = DemoPalette.InkSoft) }
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Switch(checked = saveOffline, onCheckedChange = { saveOffline = it })
                 Text("Force offline queue", color = DemoPalette.Ink, style = MaterialTheme.typography.bodyMedium)
             }
             Button(
-                onClick = { onSubmitReport(reporterName, reporterRole, transcriptText, saveOffline) },
-                enabled = !state.isSubmitting,
+                onClick = {
+                    onSubmitReport(reporterName, reporterRole, transcriptText, saveOffline, pendingAudio)
+                    pendingAudio = null
+                },
+                enabled = !state.isSubmitting && !isRecording,
                 colors = ButtonDefaults.buttonColors(containerColor = DemoPalette.Emerald),
             ) {
                 Text(if (state.isSubmitting) "Submitting…" else "Send report")

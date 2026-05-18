@@ -25,22 +25,23 @@ from playwright.async_api import async_playwright
 API = os.environ.get("API", "http://127.0.0.1:8000")
 FRONTEND = os.environ.get("FRONTEND", "http://127.0.0.1:5173")
 SITE = os.environ.get("SITE", "puente-arroyo-01")
+SITE_LABEL = os.environ.get("SITE_LABEL", "Arroyo Bridge 01")
 
-# Geografia coherente: rio baja desde aguas-arriba (Act 1 vigia rutina) hacia el
-# puente (Acto 2 camara fija) y luego desborda hacia el barrio bajo (Acto 3
-# vigias criticos). Cada summary deja la ubicacion explicita para que el
-# operador entienda la trayectoria del evento.
+# Coherent geography: water moves from upstream (Act 1 routine Vigia report) to
+# the bridge (Act 2 fixed camera), then overflows toward the low neighborhood.
+# Each summary keeps the location explicit so the operator understands the
+# downstream event trajectory.
 ACT1 = {
     "site_id": SITE,
-    "reporter_name": "Vecino Mendez (aguas arriba)",
-    "reporter_role": "ciudadano",
-    "transcript_text": "Aguas arriba: llueve fuerte pero el canal corre normal, sin riesgo todavia.",
+    "reporter_name": "Neighbor Mendez (upstream)",
+    "reporter_role": "citizen",
+    "transcript_text": "Upstream: heavy rain, but the channel is flowing normally with no risk yet.",
     "severity_score": 0.20,
     "water_level_category": "low",
     "trend": "stable",
     "road_status": "open",
     "urgency": "low",
-    "summary": "Vigia aguas arriba: lluvia fuerte, canal corre normal sin desborde.",
+    "summary": "Vigia upstream: heavy rain, channel flowing normally with no overflow.",
 }
 
 ACT2 = {
@@ -51,33 +52,33 @@ ACT2 = {
     "crossed_critical_line": False,
     "confidence": 0.81,
     "assessment_level": "elevated",
-    "temporal_summary": "Camara fija sobre el puente: cota supera linea de referencia, sin cruzar critica.",
+    "temporal_summary": "Fixed bridge camera: water level exceeds the reference line without crossing the critical line.",
 }
 
 ACT3_REPORTS = [
     {
-        "reporter_name": "Vecino Lopez (junto al puente)",
-        "reporter_role": "ciudadano",
-        "transcript_text": "Junto al puente: el agua paso la marca pintada.",
+        "reporter_name": "Neighbor Lopez (near the bridge)",
+        "reporter_role": "citizen",
+        "transcript_text": "Near the bridge: water passed the painted mark.",
         "severity_score": 0.78, "water_level_category": "high", "trend": "rising",
         "road_status": "open", "homes_affected": False, "urgency": "critical",
-        "summary": "Vigia puente: marca de agua superada, nivel sigue subiendo.",
+        "summary": "Vigia bridge: water mark exceeded, level still rising.",
     },
     {
-        "reporter_name": "Voluntario Sosa (plaza centro)",
-        "reporter_role": "brigadista",
-        "transcript_text": "Plaza centro: se taparon las calles, intransitable.",
+        "reporter_name": "Volunteer Sosa (central square)",
+        "reporter_role": "brigade_member",
+        "transcript_text": "Central square: streets are flooded and impassable.",
         "severity_score": 0.74, "water_level_category": "high", "trend": "rising",
         "road_status": "blocked", "homes_affected": False, "urgency": "critical",
-        "summary": "Vigia plaza: calles cortadas, transito interrumpido.",
+        "summary": "Vigia square: roads cut off, traffic interrupted.",
     },
     {
-        "reporter_name": "Vecina Diaz (barrio bajo)",
-        "reporter_role": "ciudadano",
-        "transcript_text": "Barrio bajo: el agua esta entrando a las casas, familias evacuadas.",
+        "reporter_name": "Neighbor Diaz (low neighborhood)",
+        "reporter_role": "citizen",
+        "transcript_text": "Low neighborhood: water is entering homes, families evacuated.",
         "severity_score": 0.88, "water_level_category": "critical", "trend": "rising",
         "road_status": "blocked", "homes_affected": True, "urgency": "critical",
-        "summary": "Vigia barrio bajo: agua dentro de viviendas, evacuacion en curso.",
+        "summary": "Vigia low neighborhood: water inside homes, evacuation in progress.",
     },
 ]
 
@@ -95,10 +96,10 @@ async def emit_cap(client: httpx.AsyncClient, alert: dict) -> None:
         "lat": -32.9468,
         "lon": -60.6393,
         "severity": sev_map.get(alert["level"], "minor"),
-        "headline": f"Alerta {alert['level'].upper()} en {alert['site_id']}",
+        "headline": f"{alert['level'].upper()} alert at {SITE_LABEL}",
         "summary": alert["summary"],
-        "instruction": "Activar protocolo de Defensa Civil y evacuar zonas anegadas.",
-        "areaDesc": alert["site_id"],
+        "instruction": "Activate Civil Defense protocol and evacuate flooded areas.",
+        "areaDesc": SITE_LABEL,
     }
     r = await client.post(f"{API}/cap/emit", json=payload, timeout=30)
     r.raise_for_status()
@@ -181,7 +182,7 @@ async def run(out_path: Path, chromium_path: str | None) -> None:
             await scroll_to(0, dwell=2000)              # banner pasa a amarillo
             await scroll_to(420, dwell=2200)            # tile camara sube
             await dump_dom_check("act2_fusion")
-            await scroll_to(820, dwell=2000)            # frame evidencia camara
+            await scroll_to(760, dwell=2000)            # camera evidence frame
             await dump_dom_check("act2_evidence")
 
             # === ACTO 3: 3 vigia criticos ===
@@ -193,11 +194,11 @@ async def run(out_path: Path, chromium_path: str | None) -> None:
                 await refresh()
                 await scroll_to(0, dwell=1400)          # banner rojo
                 await scroll_to(420, dwell=1600)        # tiles
-                await scroll_to(900, dwell=1400)        # razonamiento
+                await scroll_to(1180, dwell=1400)       # Gemma reasoning
                 await dump_dom_check(f"act3_r{i}")
 
             # === ACTO 4: razonamiento + traza + acciones operador ===
-            await scroll_to(1100, dwell=2500)           # traza auditoria
+            await scroll_to(1450, dwell=2500)           # audit trace
             await dump_dom_check("act4_audit")
             await scroll_to(0, dwell=1200)              # back to top, right column
             # right column has CAP + actions; viewport 1440 wide shows both cols
@@ -210,7 +211,7 @@ async def run(out_path: Path, chromium_path: str | None) -> None:
             await refresh()
             await scroll_to(300, dwell=2200)
             await dump_dom_check("act4_cap")
-            await scroll_to(1500, dwell=2500)           # timeline final
+            await scroll_to(1900, dwell=2500)           # final timeline
             await dump_dom_check("act4_timeline")
             await scroll_to(0, dwell=2000)              # close on banner critico
 

@@ -37,6 +37,39 @@ import {
   SectionPanel,
   SignalFusionRow,
 } from '../components/CommandCenter';
+
+const CENTRAL_NODE_MODEL = 'gemma4:e26b';
+
+const EVIDENCE_BY_LEVEL: Record<FusedAlert['level'], { frameUrl: string; frameLabel: string; description: string; confidence: number }> = {
+  green: {
+    frameUrl: '/demo_persona_c/nominal.png',
+    frameLabel: 'cv_node/nominal_frame.png',
+    description:
+      'Calm channel conditions. Water remains low against the retaining wall, with dry grass and clear banks visible across the scene.',
+    confidence: 0.82,
+  },
+  yellow: {
+    frameUrl: '/demo_persona_c/watch.png',
+    frameLabel: 'cv_node/watch_frame.png',
+    description:
+      'Water level has risen across the channel and surface flow is stronger, but the bank and access path remain mostly clear.',
+    confidence: 0.84,
+  },
+  orange: {
+    frameUrl: '/demo_persona_c/watch.png',
+    frameLabel: 'cv_node/watch_frame.png',
+    description:
+      'Elevated water covers most of the channel and is approaching the bank. Continued rise would compromise the access path.',
+    confidence: 0.86,
+  },
+  red: {
+    frameUrl: '/demo_persona_c/critical.png',
+    frameLabel: 'cv_node/critical_frame.png',
+    description:
+      'Floodwater has overtopped the bank and spread into the foreground access area. Street-level structures and low ground are exposed.',
+    confidence: 0.91,
+  },
+};
 import type {
   ActionCall,
   AuditEntry,
@@ -78,9 +111,9 @@ const DEMO_ALERT: FusedAlert = {
     'rise_velocity 0.0034/frame > threshold 0.0020 → sustained rise signal',
     'volunteer report lexically matches "crossed the critical mark"',
     'hydromet 12h probability = 68% → corroborates event hypothesis',
-    'fused_score = 0.87 → nivel RED, emit_cap_xml habilitado',
+    'fused_score = 0.87 -> RED level, emit_cap_xml enabled',
   ]),
-  reasoning_model: 'gemma4:e2b',
+  reasoning_model: CENTRAL_NODE_MODEL,
 };
 
 const DEMO_FUSION: SignalInput[] = [
@@ -103,7 +136,7 @@ const DEMO_TIMELINE_FACTORY = (): TimelineEvent[] => {
   const t = (deltaSec: number) => new Date(now + deltaSec * 1000).toISOString();
   return [
     { at: t(-240), kind: 'detect',    label: 'CV detection',            detail: 'Silverado node: rise_velocity > threshold', done: true },
-    { at: t(-185), kind: 'volunteer', label: 'Volunteer report',       detail: 'Brigade member María G. (Vigía Android)', done: true },
+    { at: t(-185), kind: 'volunteer', label: 'Volunteer report',       detail: 'Brigade member Maria G. (Vigia Android)', done: true },
     { at: t(-145), kind: 'fuse',      label: 'Signal fusion',          detail: 'fused_score = 0.87 · level = red',        done: true },
     { at: t(-90),  kind: 'cap',       label: 'CAP v1.2 emitted',       detail: 'receipt CAP-2026-05-16-0042',             done: true },
     { at: t(-70),  kind: 'siren',     label: 'Siren triggered',        detail: 'GPIO relay low zone',                     done: true },
@@ -262,7 +295,7 @@ export default function Dashboard() {
   };
 
   const actions: ActionCall[] = [
-    { fn: 'emit_cap_xml',         arg: `site=${activeAlert.site_id}`, busy: actionState.emit_cap_xml.busy },
+    { fn: 'emit_cap_xml',         arg: `site=${activeSite?.name ?? activeAlert.site_id}`, busy: actionState.emit_cap_xml.busy },
     { fn: 'trigger_siren',        arg: 'zone=low',                     busy: actionState.trigger_siren.busy },
     { fn: 'send_lora_alert',      arg: 'broadcast',                    busy: actionState.send_lora_alert.busy },
     { fn: 'notify_civil_defense', arg: 'webhook=municipal',            busy: actionState.notify_civil_defense.busy },
@@ -293,15 +326,13 @@ export default function Dashboard() {
             <SignalFusionRow inputs={liveSignals} />
           </SectionPanel>
 
-          <SectionPanel title="Evidence frame · Gemma narration" meta={activeAlert.reasoning_model ?? 'local'}>
+          <SectionPanel title="Evidence frame · Gemma narration" meta={CENTRAL_NODE_MODEL}>
             <EvidencePanel
-              frameUrl={null}
-              description={
-                'Turbid water covers the lower band of the frame and exceeds the calibrated critical line. ' +
-                'Vegetation partially submerged on the right margin; no visible infrastructure at risk yet.'
-              }
-              model={activeAlert.reasoning_model}
-              confidence={0.78}
+              frameUrl={EVIDENCE_BY_LEVEL[activeAlert.level].frameUrl}
+              frameLabel={EVIDENCE_BY_LEVEL[activeAlert.level].frameLabel}
+              description={EVIDENCE_BY_LEVEL[activeAlert.level].description}
+              model={CENTRAL_NODE_MODEL}
+              confidence={EVIDENCE_BY_LEVEL[activeAlert.level].confidence}
             />
           </SectionPanel>
 
@@ -309,7 +340,7 @@ export default function Dashboard() {
             <GemmaReasoning
               summary={activeAlert.reasoning_summary}
               chain={reasoningChain}
-              model={activeAlert.reasoning_model}
+              model={CENTRAL_NODE_MODEL}
             />
           )}
 

@@ -29,10 +29,10 @@ class DecisionRuntime(Protocol):
 
 
 LEVEL_MEANINGS = {
-    "green": "Sin evidencia reciente de riesgo operativo.",
-    "yellow": "Riesgo incipiente o evidencia local moderada que requiere monitoreo.",
-    "orange": "Riesgo alto corroborado o una fuente critica que requiere preparacion/accion local.",
-    "red": "Riesgo severo o impacto observado que requiere accion inmediata.",
+    "green": "No recent evidence of operational risk.",
+    "yellow": "Emerging risk or moderate local evidence requiring monitoring.",
+    "orange": "Corroborated high risk or one critical source requiring local preparation/action.",
+    "red": "Severe risk or observed impact requiring immediate action.",
 }
 
 

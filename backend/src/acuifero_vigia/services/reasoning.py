@@ -1,6 +1,6 @@
 """Auditable thinking-mode chain for FusedAlert severity decisions.
 
-Runs a Spanish-language prompt through the local Gemma endpoint and produces a
+Runs an English-language prompt through the local Gemma endpoint and produces a
 ReasoningBlock that accompanies the deterministic decision_trace. Green alerts
 skip the LLM (cost/latency). If Ollama is down, a rule-fallback summary is
 generated so alert emission never blocks on model availability.
@@ -23,11 +23,11 @@ class ReasoningBlock:
     model_name: str = "rule-fallback"
 
 
-SYSTEM_PROMPT_ES = (
-    "Sos Gemma en el nodo Acuifero. Responde en espanol. "
-    "Usa maximo 35 palabras. Cita senales por nombre. "
-    "Formato exacto: Resumen: ... Cadena: paso1 -> paso2. "
-    "Sin markdown ni datos inventados."
+SYSTEM_PROMPT = (
+    "You are Gemma running on the Acuifero node. Respond in English. "
+    "Use at most 35 words. Cite signals by name. "
+    "Exact format: Summary: ... Chain: step1 -> step2. "
+    "No markdown and no invented data."
 )
 
 
@@ -40,7 +40,7 @@ def _render_inputs(
     rules_fired: list[str],
 ) -> str:
     parts: list[str] = []
-    parts.append(f"nivel={level} score={fused_score:.2f}")
+    parts.append(f"level={level} score={fused_score:.2f}")
     if node_obs:
         parts.append(
             "node "
@@ -75,7 +75,11 @@ def _render_inputs(
 def _parse_llm_output(raw: str) -> tuple[str, list[str]]:
     summary = raw.strip()
     chain: list[str] = []
-    if "Cadena:" in summary:
+    if "Chain:" in summary:
+        head, _, tail = summary.partition("Chain:")
+        summary = head.strip()
+        chain = [step.strip() for step in tail.split("->") if step.strip()]
+    elif "Cadena:" in summary:
         head, _, tail = summary.partition("Cadena:")
         summary = head.strip()
         chain = [step.strip() for step in tail.split("->") if step.strip()]
@@ -83,15 +87,19 @@ def _parse_llm_output(raw: str) -> tuple[str, list[str]]:
         # Split into up-to-3 sentence-like fragments as a coarse CoT surrogate.
         pieces = [p.strip() for p in summary.replace("\n", " ").split(".") if p.strip()]
         chain = pieces[:3]
+    if summary.startswith("Summary:"):
+        summary = summary.removeprefix("Summary:").strip()
+    elif summary.startswith("Resumen:"):
+        summary = summary.removeprefix("Resumen:").strip()
     return summary, chain[:5]
 
 
 def _fallback(level: str, rules_fired: list[str]) -> ReasoningBlock:
-    rules = rules_fired or ["sin reglas deterministicas disparadas"]
+    rules = rules_fired or ["no deterministic rules fired"]
     summary = (
-        f"Alerta {level} emitida por regla local. "
-        f"Senales activas: {', '.join(rules[:3])}. "
-        "Gemma no disponible, se usa resumen deterministico."
+        f"{level.upper()} alert emitted by local rule. "
+        f"Active signals: {', '.join(rules[:3])}. "
+        "Gemma unavailable; deterministic summary used."
     )
     return ReasoningBlock(
         llm_summary=summary,
@@ -122,7 +130,7 @@ def generate_alert_reasoning(
     rules_fired: list[str],
     llm: Optional[TextGenerator] = None,
 ) -> ReasoningBlock:
-    """Produce a Spanish reasoning block for an alert.
+    """Produce an English reasoning block for an alert.
 
     Green alerts return an empty-ish block with only a rule-based single-line
     summary (no LLM call). Yellow/orange/red call the LLM with a deterministic
@@ -130,8 +138,8 @@ def generate_alert_reasoning(
     """
     if level == "green":
         return ReasoningBlock(
-            llm_summary="Nivel verde: no se supera umbral de riesgo. No se invoca Gemma.",
-            llm_chain_of_thought=["sin senales sobre umbral"],
+            llm_summary="Green level: no risk threshold exceeded. Gemma not invoked.",
+            llm_chain_of_thought=["no signals above threshold"],
             model_name="rule-skip-green",
         )
 
@@ -139,7 +147,7 @@ def generate_alert_reasoning(
         return _fallback(level, rules_fired)
 
     user_prompt = _render_inputs(node_obs, volunteer_parsed, hydromet, fused_score, level, rules_fired)
-    raw = llm.generate_text(SYSTEM_PROMPT_ES, user_prompt, max_tokens=192)
+    raw = llm.generate_text(SYSTEM_PROMPT, user_prompt, max_tokens=192)
     if not raw:
         return _fallback(level, rules_fired)
 

@@ -178,7 +178,7 @@ export function SignalFusionRow({ inputs }: { inputs: SignalInput[] }) {
             </div>
             {sig.model && (
               <div className="mt-1 text-[10px] font-mono text-slate-600 truncate">
-                modelo: {sig.model}
+                model: {sig.model}
               </div>
             )}
           </div>
@@ -196,9 +196,10 @@ interface EvidencePanelProps {
   description?: string | null;
   model?: string | null;
   confidence?: number | null;
+  frameLabel?: string | null;
 }
 
-export function EvidencePanel({ frameUrl, description, model, confidence }: EvidencePanelProps) {
+export function EvidencePanel({ frameUrl, description, model, confidence, frameLabel }: EvidencePanelProps) {
   return (
     <div className="rounded-lg overflow-hidden border border-slate-800 bg-slate-950 relative">
       <div className="px-4 py-2 bg-slate-900 border-b border-slate-800 flex items-center justify-between">
@@ -206,11 +207,11 @@ export function EvidencePanel({ frameUrl, description, model, confidence }: Evid
           Evidence frame
         </div>
         <span className="text-xs font-mono text-slate-500">
-          {frameUrl ? 'cv_node/last_frame.jpg' : 'sample/demo · no real frame'}
+          {frameLabel ?? (frameUrl ? 'cv_node/last_frame.jpg' : 'sample/demo - no real frame')}
         </span>
       </div>
 
-      <div className="relative" style={{ aspectRatio: '16 / 7', minHeight: 200 }}>
+      <div className="relative" style={{ aspectRatio: '16 / 9', minHeight: 260 }}>
         {frameUrl ? (
           <img src={frameUrl} alt="Evidence frame" className="w-full h-full object-cover" />
         ) : (
@@ -386,7 +387,7 @@ const ACTION_ICON: Record<ActionCall['fn'], typeof FileText> = {
   notify_civil_defense: Megaphone,
 };
 
-const ACTION_LABEL_ES: Record<ActionCall['fn'], string> = {
+const ACTION_LABEL: Record<ActionCall['fn'], string> = {
   emit_cap_xml:         'Emit CAP v1.2',
   trigger_siren:        'Trigger siren',
   send_lora_alert:      'Send LoRa alert',
@@ -421,7 +422,7 @@ export function ActionRail({
             {a.busy
               ? <LoaderCircle className="w-4 h-4 text-amber-300" style={{ animation: 'vigia-spin 1s linear infinite' }} />
               : <IconComp className="w-4 h-4 text-amber-300" />}
-            <span>{ACTION_LABEL_ES[a.fn]}</span>
+            <span>{ACTION_LABEL[a.fn]}</span>
             <span className="cc-action-arg">{a.arg}</span>
           </button>
         );
