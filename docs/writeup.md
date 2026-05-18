@@ -181,7 +181,30 @@ publico ("complementario, no reemplaza SMN ni Defensa Civil oficial"),
 notificacion AAIP en 72 h ante incidente. Detalle y fuentes oficiales
 en [`docs/compliance_argentina.md`](compliance_argentina.md).
 
-## 9. Limitaciones y próximos pasos
+## 9. Roadmap & Stabilized Experimental Track
+
+La rama `feature/experimental-track` estabiliza dos extensiones de alto
+impacto sin tocar `develop`.
+
+- **Edge RAG offline.** El backend consulta una SQLite local FTS5 con
+  manuales de Defensa Civil e historiales de crecidas por sitio. Cada
+  fragmento recuperado incluye `ctx:id`, fuente, jurisdiccion, vigencia,
+  URI y ranking. El dashboard persiste por sitio el switch
+  `Activar Contexto Historico`, muestra las citas y anexa los hits al
+  `decision_trace` sin depender de internet.
+- **Nowcasting visual.** `services/predictive.py` agrega aceleracion
+  acotada, estado `ok/degraded/insufficient_data`, confianza, banda de
+  incertidumbre, ETA al umbral critico y serie de puntos para graficar
+  la `Proyeccion a 60 min`. El umbral critico es configurable por sitio
+  desde settings persistentes.
+- **Endpoints propios.** La UI ya no depende de piggyback sobre
+  `/alerts`: usa `/sites/{site_id}/historical-context`,
+  `/sites/{site_id}/forecast` y `/sites/{site_id}/experimental-settings`.
+
+Quedan como *experimental track* por politica de producto, no por falta
+de contrato: tienen API, trazabilidad, degradacion explicita y tests.
+
+## 10. Limitaciones y próximos pasos
 
 Honestos: (a) calibracion del ROI es numerica/rectangular, no
 click-to-draw; (b) el evidence builder esta tuneado para encuadres
