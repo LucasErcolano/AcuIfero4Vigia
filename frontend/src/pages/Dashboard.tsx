@@ -21,9 +21,9 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, Database, TrendingUp } from 'lucide-react';
 import { useAppStore } from '../store';
-import type { FusedAlert, Site } from '../store';
+import type { FusedAlert, HistoricalContextHit, Site, SiteForecast } from '../store';
 import {
   ActionRail,
   AuditTrace,
@@ -159,7 +159,21 @@ const DEMO_CAP = {
 // Dashboard (Persona C command center)
 // ──────────────────────────────────────────────────────────────────────────
 export default function Dashboard() {
-  const { sites, alerts, fetchSites, fetchAlerts, isOnline, queueCount } = useAppStore();
+  const {
+    sites,
+    alerts,
+    fetchSites,
+    fetchAlerts,
+    fetchSiteExperimentalSettings,
+    updateSiteExperimentalSettings,
+    fetchSiteHistoricalContext,
+    fetchSiteForecast,
+    isOnline,
+    queueCount,
+    siteSettings,
+    siteForecasts,
+    siteHistoricalContext,
+  } = useAppStore();
 
   // Local state for the action rail. The buttons fire deterministic UI feedback
   // so the recording shows the loop closing — they do NOT silently invent
@@ -191,6 +205,22 @@ export default function Dashboard() {
     }
     return { activeAlert: DEMO_ALERT, activeSite: DEMO_SITE, isDemo: true };
   }, [alerts, sites]);
+
+  const activeSiteId = activeSite?.id ?? activeAlert.site_id;
+  const currentSettings = siteSettings[activeSiteId];
+  const historicalContextEnabled = Boolean(currentSettings?.historical_context_enabled);
+
+  useEffect(() => {
+    if (!isOnline || !activeSiteId) return;
+    fetchSiteExperimentalSettings(activeSiteId);
+    fetchSiteForecast(activeSiteId);
+  }, [activeSiteId, fetchSiteExperimentalSettings, fetchSiteForecast, isOnline]);
+
+  useEffect(() => {
+    if (!isOnline || !activeSiteId || !historicalContextEnabled) return;
+    const query = `${activeAlert.level} ${activeAlert.trigger_source ?? ''} ${activeAlert.summary ?? ''}`;
+    fetchSiteHistoricalContext(activeSiteId, { waterLevel: activeAlert.score, query });
+  }, [activeAlert.level, activeAlert.score, activeAlert.summary, activeAlert.trigger_source, activeSiteId, fetchSiteHistoricalContext, historicalContextEnabled, isOnline]);
 
   const reasoningChain = useMemo(() => {
     if (!activeAlert?.reasoning_chain) return undefined;
@@ -271,6 +301,108 @@ export default function Dashboard() {
     return entries;
   }, [liveTrace]);
 
+  const historicalContext = useMemo<HistoricalContextHit[]>(() => {
+    const stored = siteHistoricalContext[activeSiteId];
+    if (historicalContextEnabled && stored?.length) return stored;
+    const hits = liveTrace?.historical_context?.hits;
+    if (Array.isArray(hits) && hits.length > 0) {
+      return hits.map((hit: any) => ({
+        id: Number(hit.id ?? 0),
+        title: String(hit.title ?? 'Historical context'),
+        source: String(hit.source ?? 'edge-rag-sqlite'),
+        summary: String(hit.summary ?? ''),
+        threshold_level: typeof hit.threshold_level === 'number' ? hit.threshold_level : null,
+        jurisdiction: hit.jurisdiction ? String(hit.jurisdiction) : null,
+        effective_from: hit.effective_from ? String(hit.effective_from) : null,
+        effective_to: hit.effective_to ? String(hit.effective_to) : null,
+        source_uri: hit.source_uri ? String(hit.source_uri) : null,
+        rank: Number(hit.rank ?? 0),
+      }));
+    }
+    if (!historicalContextEnabled) return [];
+    return [
+      {
+        id: 0,
+        title: '2015 flood analogue',
+        source: 'edge-rag-sqlite',
+        summary: 'At a similar bridge mark, low access roads were cut within roughly 45 minutes.',
+        threshold_level: 0.78,
+        jurisdiction: 'demo',
+        rank: 0.75,
+      },
+      {
+        id: 0,
+        title: 'Evacuation trigger',
+        source: 'civil_defense_manual',
+        summary: 'Fast rise above the local mark requires early evacuation messaging before overtopping.',
+        threshold_level: 0.7,
+        jurisdiction: 'demo',
+        rank: 0.72,
+      },
+    ];
+  }, [activeSiteId, historicalContextEnabled, liveTrace, siteHistoricalContext]);
+
+  const forecast = useMemo<SiteForecast>(() => {
+    const stored = siteForecasts[activeSiteId];
+    if (stored) return stored;
+    const raw = liveTrace?.forecast;
+    if (raw?.projected_points && Array.isArray(raw.projected_points)) {
+      return {
+        horizon_minutes: Number(raw.horizon_minutes) || 60,
+        expected_level: Number(raw.expected_level) || 0,
+        trend_per_hour: Number(raw.trend_per_hour) || 0,
+        acceleration_per_hour2: Number(raw.acceleration_per_hour2) || 0,
+        risk: String(raw.risk || 'unknown'),
+        status: String(raw.status || 'ok'),
+        confidence: Number(raw.confidence) || 0.45,
+        critical_threshold: Number(raw.critical_threshold) || 0.8,
+        minutes_to_threshold: typeof raw.minutes_to_threshold === 'number' ? raw.minutes_to_threshold : null,
+        warning: raw.warning ? String(raw.warning) : null,
+        projected_points: raw.projected_points.map((point: any) => ({
+          minute: Number(point.minute) || 0,
+          level: Number(point.level) || 0,
+        })),
+        uncertainty_band: Array.isArray(raw.uncertainty_band) ? raw.uncertainty_band.map((point: any) => ({
+          minute: Number(point.minute) || 0,
+          low: Number(point.low) || 0,
+          high: Number(point.high) || 0,
+        })) : [],
+      };
+    }
+    const base = activeAlert.level === 'red' ? 0.82 : activeAlert.level === 'orange' ? 0.68 : activeAlert.level === 'yellow' ? 0.52 : 0.35;
+    const trend = activeAlert.level === 'red' ? 0.18 : activeAlert.level === 'orange' ? 0.14 : 0.08;
+    return {
+      horizon_minutes: 60,
+      expected_level: Math.min(1, base + trend),
+      trend_per_hour: trend,
+      acceleration_per_hour2: activeAlert.level === 'red' ? 0.07 : 0.03,
+      risk: activeAlert.level === 'green' ? 'low' : activeAlert.level === 'yellow' ? 'moderate' : 'high',
+      status: 'demo',
+      confidence: 0.42,
+      critical_threshold: 0.8,
+      minutes_to_threshold: activeAlert.level === 'red' ? 0 : activeAlert.level === 'orange' ? 45 : null,
+      warning: 'Demo projection until enough site measurements are available.',
+      projected_points: [0, 15, 30, 45, 60].map((minute) => ({
+        minute,
+        level: Math.min(1, base + trend * (minute / 60) + 0.5 * 0.05 * (minute / 60) ** 2),
+      })),
+      uncertainty_band: [0, 15, 30, 45, 60].map((minute) => {
+        const level = Math.min(1, base + trend * (minute / 60) + 0.5 * 0.05 * (minute / 60) ** 2);
+        return { minute, low: Math.max(0, level - 0.08), high: level + 0.08 };
+      }),
+    };
+  }, [activeAlert.level, activeSiteId, liveTrace, siteForecasts]);
+
+  const toggleHistoricalContext = async (enabled: boolean) => {
+    const updated = await updateSiteExperimentalSettings(activeSiteId, {
+      historical_context_enabled: enabled,
+    });
+    if (updated?.historical_context_enabled) {
+      const query = `${activeAlert.level} ${activeAlert.trigger_source ?? ''} ${activeAlert.summary ?? ''}`;
+      await fetchSiteHistoricalContext(activeSiteId, { waterLevel: activeAlert.score, query });
+    }
+  };
+
   const invokeAction = (fn: ActionCall['fn']) => {
     setActionState((prev) => ({ ...prev, [fn]: { busy: true } }));
     const at = new Date().toLocaleTimeString('en-US');
@@ -326,6 +458,12 @@ export default function Dashboard() {
             <SignalFusionRow inputs={liveSignals} />
           </SectionPanel>
 
+          <ExperimentalControls
+            historicalContextEnabled={historicalContextEnabled}
+            onToggleHistoricalContext={toggleHistoricalContext}
+            settingsLoaded={Boolean(currentSettings)}
+          />
+
           <SectionPanel title="Evidence frame · Gemma narration" meta={CENTRAL_NODE_MODEL}>
             <EvidencePanel
               frameUrl={EVIDENCE_BY_LEVEL[activeAlert.level].frameUrl}
@@ -342,6 +480,10 @@ export default function Dashboard() {
               chain={reasoningChain}
               model={CENTRAL_NODE_MODEL}
             />
+          )}
+
+          {historicalContextEnabled && historicalContext.length > 0 && (
+            <HistoricalContextPanel hits={historicalContext} />
           )}
 
           <AuditTrace entries={liveAudit} />
@@ -369,6 +511,8 @@ export default function Dashboard() {
             queueCount={queueCount}
             lastSync={isOnline ? new Date().toLocaleTimeString('en-US') : null}
           />
+
+          <ForecastPanel forecast={forecast} />
         </div>
       </div>
 
@@ -377,6 +521,174 @@ export default function Dashboard() {
 
       {/* ── Auxiliary: sites grid for navigation ───────────────────── */}
       <SitesGrid sites={sites} isOnline={isOnline} />
+    </div>
+  );
+}
+
+function ExperimentalControls({
+  historicalContextEnabled,
+  onToggleHistoricalContext,
+  settingsLoaded,
+}: {
+  historicalContextEnabled: boolean;
+  onToggleHistoricalContext: (value: boolean) => void;
+  settingsLoaded: boolean;
+}) {
+  return (
+    <div className="bg-slate-900 border border-slate-800 rounded-lg p-4 flex items-center justify-between gap-4">
+      <div className="flex items-center gap-3 min-w-0">
+        <Database className="w-5 h-5 text-amber-300 flex-shrink-0" />
+        <div className="min-w-0">
+          <div className="text-xs uppercase tracking-wider text-slate-400 font-semibold">
+            Experimental roadmap
+          </div>
+          <div className="text-sm text-slate-200 font-semibold">
+            Activar Contexto Historico
+          </div>
+        </div>
+      </div>
+      <button
+        type="button"
+        aria-pressed={historicalContextEnabled}
+        disabled={!settingsLoaded}
+        onClick={() => onToggleHistoricalContext(!historicalContextEnabled)}
+        className={`relative inline-flex h-7 w-12 flex-shrink-0 items-center rounded-full border transition-colors disabled:opacity-50 ${
+          historicalContextEnabled
+            ? 'bg-amber-400 border-amber-300'
+            : 'bg-slate-800 border-slate-700'
+        }`}
+      >
+        <span
+          className={`inline-block h-5 w-5 rounded-full bg-white transition-transform ${
+            historicalContextEnabled ? 'translate-x-5' : 'translate-x-1'
+          }`}
+        />
+      </button>
+    </div>
+  );
+}
+
+function HistoricalContextPanel({
+  hits,
+}: {
+  hits: HistoricalContextHit[];
+}) {
+  return (
+    <div className="bg-slate-900 border border-slate-800 rounded-lg p-4">
+      <div className="flex items-center justify-between gap-3 mb-3">
+        <div className="text-xs uppercase tracking-wider text-slate-400 font-semibold">
+          Edge RAG offline
+        </div>
+        <span className="text-xs font-mono text-amber-300">sqlite/local</span>
+      </div>
+      <div className="space-y-2">
+        {hits.map((hit, index) => (
+          <div key={`${hit.title}-${index}`} className="border border-slate-800 rounded-md p-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-sm font-semibold text-white">{hit.title}</div>
+              <span className="text-[10px] uppercase tracking-wider text-slate-500 font-mono">
+                ctx:{hit.id || '--'} · {hit.source}
+              </span>
+            </div>
+            <p className="text-xs text-slate-400 leading-snug mt-1">{hit.summary}</p>
+            <div className="mt-2 flex items-center justify-between gap-2 text-[10px] font-mono text-slate-500">
+              <span>{hit.jurisdiction ?? 'local'} · rank {(hit.rank * 100).toFixed(0)}%</span>
+              <span>{hit.threshold_level == null ? 'threshold --' : `threshold ${hit.threshold_level.toFixed(2)}`}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ForecastPanel({
+  forecast,
+}: {
+  forecast: SiteForecast;
+}) {
+  const width = 320;
+  const height = 120;
+  const maxMinute = Math.max(60, ...forecast.projected_points.map((point) => point.minute));
+  const path = forecast.projected_points
+    .map((point, index) => {
+      const x = (point.minute / maxMinute) * width;
+      const y = height - Math.min(1, point.level) * height;
+      return `${index === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`;
+    })
+    .join(' ');
+
+  const bandPath = forecast.uncertainty_band.length
+    ? [
+        ...forecast.uncertainty_band.map((point, index) => {
+          const x = (point.minute / maxMinute) * width;
+          const y = height - Math.min(1.2, point.high) * height;
+          return `${index === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`;
+        }),
+        ...[...forecast.uncertainty_band].reverse().map((point) => {
+          const x = (point.minute / maxMinute) * width;
+          const y = height - Math.min(1.2, point.low) * height;
+          return `L ${x.toFixed(1)} ${y.toFixed(1)}`;
+        }),
+        'Z',
+      ].join(' ')
+    : '';
+  const eta = forecast.minutes_to_threshold == null
+    ? '>60m'
+    : forecast.minutes_to_threshold === 0
+      ? 'crossed'
+      : `${forecast.minutes_to_threshold}m`;
+
+  return (
+    <div className="bg-slate-900 border border-slate-800 rounded-lg p-4">
+      <div className="flex items-center justify-between gap-2 mb-3">
+        <div className="flex items-center gap-2">
+          <TrendingUp className="w-4 h-4 text-amber-300" />
+          <div className="text-xs uppercase tracking-wider text-slate-400 font-semibold">
+            Proyeccion a 60 min
+          </div>
+        </div>
+        <span className="text-xs font-mono text-amber-300">{forecast.status} · {forecast.risk}</span>
+      </div>
+      <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-32" role="img" aria-label="Water level forecast">
+        <line
+          x1="0"
+          y1={height - Math.min(1.2, forecast.critical_threshold) * height}
+          x2={width}
+          y2={height - Math.min(1.2, forecast.critical_threshold) * height}
+          stroke="#ef4444"
+          strokeWidth="1.5"
+          strokeDasharray="5 5"
+        />
+        {bandPath && <path d={bandPath} fill="rgba(245, 158, 11, 0.18)" />}
+        <path d={path} fill="none" stroke="#f59e0b" strokeWidth="3" strokeDasharray="6 5" strokeLinecap="round" />
+        {forecast.projected_points.map((point) => (
+          <circle
+            key={point.minute}
+            cx={(point.minute / maxMinute) * width}
+            cy={height - Math.min(1, point.level) * height}
+            r="3"
+            fill="#fbbf24"
+          />
+        ))}
+      </svg>
+      <div className="grid grid-cols-3 gap-2 text-xs">
+        <div className="cc-metric">
+          <span className="cc-k">level_60m</span>
+          <span className="cc-v">{forecast.expected_level.toFixed(2)}</span>
+        </div>
+        <div className="cc-metric">
+          <span className="cc-k">conf</span>
+          <span className="cc-v">{(forecast.confidence * 100).toFixed(0)}%</span>
+        </div>
+        <div className="cc-metric">
+          <span className="cc-k">eta</span>
+          <span className="cc-v">{eta}</span>
+        </div>
+      </div>
+      {forecast.warning && (
+        <p className="mt-3 text-xs text-slate-400 leading-snug">{forecast.warning}</p>
+      )}
     </div>
   );
 }

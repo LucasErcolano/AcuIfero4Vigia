@@ -25,6 +25,25 @@ class RuntimeStatus(BaseModel):
 
 class RecomputeRequest(BaseModel):
     site_id: str | None = None
+    use_historical_context: bool = False
+
+
+class HistoricalContextUpsert(BaseModel):
+    source: str
+    title: str
+    summary: str
+    threshold_level: float | None = Field(default=None, ge=0.0, le=1.5)
+    jurisdiction: str | None = None
+    effective_from: str | None = None
+    effective_to: str | None = None
+    source_uri: str | None = None
+
+
+class SiteExperimentalSettingsPayload(BaseModel):
+    historical_context_enabled: bool | None = None
+    forecast_enabled: bool | None = None
+    forecast_horizon_minutes: int | None = Field(default=None, ge=15, le=180)
+    forecast_critical_threshold: float | None = Field(default=None, ge=0.1, le=1.5)
 
 
 class ExternalSnapshotResponse(BaseModel):
