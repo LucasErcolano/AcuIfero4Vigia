@@ -2,6 +2,13 @@
 
 *Sistema híbrido de alerta temprana de inundaciones con IA en el borde, resiliente a la caída de conectividad.*
 
+> **Documento de producto y narrativa.** Pitch extenso en español: problema,
+> encaje en el track, cómo se ve la demo, arquitectura, factibilidad,
+> diferenciación y Novelty Assessment. Para la grilla de criterios del
+> hackathon con proof links, ver [`HACKATHON.md`](HACKATHON.md). Para
+> reproducibilidad paso a paso, ver
+> [`docs/REPRODUCIBILITY.md`](docs/REPRODUCIBILITY.md).
+
 ---
 
 ## **Pitch de una línea**
