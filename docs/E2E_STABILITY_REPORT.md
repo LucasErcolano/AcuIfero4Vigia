@@ -90,6 +90,24 @@ Run on the same VM/RTX 3060 environment as above. Ollama serves `gemma4:26b`; Li
 
 All three suites complete without HTTP 5xx, SQLite locks, LiteRT crashes, OOM, or hung sessions. The two non-fixable observations - per-request LLM latency on a 26 B model and serial LiteRT inference on a single GPU - are physics, not bugs.
 
+## Re-run after PR #5 merge (experimental track: Edge RAG + visual nowcasting + dashboard settings)
+
+PR #5 merged into `develop` (commit `3fab292`). Stress suites re-executed on the same VM/RTX 3060 stack.
+
+### Regression found and fixed
+
+- Suite 1b 20-burst returned 5/20 HTTP 500 with `sqlalchemy.exc.TimeoutError: QueuePool limit of size 5 overflow 10 reached`. Root cause: PR #5 added per-request DB work in the historical-context / RAG / forecast paths; the default SQLAlchemy pool (`pool_size=5`, `max_overflow=10`) exhausted under 20-concurrent /reports.
+- Fix: `backend/src/acuifero_vigia/db/database.py` now creates both edge/central engines with `pool_size=20`, `max_overflow=40`, `pool_timeout=30`, `pool_recycle=1800`, plus a 30 s SQLite busy timeout in `connect_args`. After the fix, 20/20 reports returned HTTP 200 in 304 s, with 0 SQLite locks and 0 5xx.
+
+### Re-run verification
+
+- Suite 1a (`scripts/demo_connectivity.py`): full narrative ok, `queued=130 flushed=130 failed=0`, recovery 33 s (<90 s target).
+- Suite 1b (20 concurrent `POST /api/reports`): `total=20 ok=20 elapsed=304.06s`, `grep -ciE 'database is locked|OperationalError|deadlock|QueuePool' /tmp/backend.log` = 0, `500 Internal` count = 0.
+- Suite 2 (multimodal under VRAM pressure, `ACUIFERO_MULTIMODAL_MAX_FRAMES=4`): `POST /api/node/analyze` with the 60 MB USGS video returned HTTP 200 in 41.17 s. VRAM baseline 8825 MiB -> peak 10974 MiB / 12288 MiB (~89 %). No OOM, no LiteRT crash.
+- Suite 3a (LLM dead, `ACUIFERO_LLM_BASE_URL=http://127.0.0.1:9/v1`, timeout 5 s): `POST /api/reports` -> HTTP 200 in 0.30 s, `parser_source=rules`, `alert.level=red`, `score=1.0`.
+- Suite 3b (malformed JSON via mock on `127.0.0.1:9999`): `POST /api/reports` -> HTTP 200 in 0.25 s, `parser_source=rules`, `alert.level=red`, `score=1.0`. No 500.
+- Suite 3c (5 parallel `POST /api/sites/silverado-fixed-cam-usgs/sample-node-analysis`): 5/5 HTTP 200, latencies 29.99 / 55.35 / 80.73 / 105.92 / 131.12 s (LiteRT engine serialized cleanly, no crash, no `Failed to create new sequence`).
+
 ## Status
 
-System stable on `develop`. E2E + stress suites green. Ready to merge to `main`.
+System stable on `develop` after PR #5 merge + pool fix. E2E + stress suites green. Ready to merge to `main`.
