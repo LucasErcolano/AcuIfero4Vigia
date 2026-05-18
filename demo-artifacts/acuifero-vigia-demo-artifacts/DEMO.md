@@ -35,7 +35,10 @@ Hardware:
 
 - Raspberry Pi 4 (8 GB) or Pi 5
 - Pi Camera module v2/v3 or USB camera
-- Local Gemma 4 runtime (LiteRT / Ollama / llama.cpp)
+- Local Gemma 4 runtimes per tier:
+  - Acuífero node: LiteRT serving `google/gemma-4-E4B-it` (int4)
+  - Vigía app:     LiteRT serving `google/gemma-4-E2B-it` (int4)
+  - Central node:  Ollama serving `google/gemma-4-26B-A4B-it` (q4_K_M)
 - Optional: Android device with `app/vigia-demo.apk` installed
 
 Commands:
@@ -62,9 +65,11 @@ cloud_required=false
 
 - Local node detects water-level change against thresholds in
   `config/thresholds.json` (deterministic firewall, no LLM).
-- Vigía citizen report is transcribed and passed to Gemma 4 with the prompt
-  in `config/prompt_templates.md`.
-- Gemma 4 fuses node telemetry + citizen evidence, returns structured JSON
+- Vigía citizen report is transcribed and passed to `gemma-4-E2B-it` on the
+  handset with the prompt in `config/prompt_templates.md`.
+- Acuífero node classifies camera frames with `gemma-4-E4B-it` (LiteRT, int4).
+- Central node fuses node telemetry + citizen evidence with
+  `gemma-4-26B-A4B-it` (Ollama, q4_K_M), returns structured JSON
   (severity, evidence, recommended_action, uncertainty).
 - Final alert is written to `outputs/alerts/` and surfaced on the dashboard
   (`outputs/screenshots/dashboard_urgent.png`) and the Vigía app

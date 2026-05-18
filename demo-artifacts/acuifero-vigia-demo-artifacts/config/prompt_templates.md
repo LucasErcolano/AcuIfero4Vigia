@@ -3,6 +3,14 @@
 All prompts are sent to Gemma 4 in JSON mode (`response_format: json`). Field
 names are stable; the deterministic firewall validates them before publishing.
 
+Per-tier model routing:
+
+| Prompt | Tier | Model |
+|---|---|---|
+| §1 Vigía citizen-report fusion | Android handset | `google/gemma-4-E2B-it` |
+| §2 Acuífero node visual classification | Raspberry Pi camera node | `google/gemma-4-E4B-it` |
+| §3 Final fusion (node + Vigía) | Central server | `google/gemma-4-26B-A4B-it` |
+
 ## 1. Vigía citizen-report fusion
 
 ```

@@ -47,10 +47,34 @@
     "expected_outputs": "eval/expected_outputs.json",
     "replay_results": "eval/replay_results.json"
   },
-  "model": {
-    "name": "google/gemma-4-4b-it",
+  "models": {
     "weights_bundled": false,
-    "weights_source": "official Gemma release",
-    "runtime": ["LiteRT", "Ollama", "llama.cpp"]
+    "weights_source": "official Gemma release (huggingface.co/google)",
+    "tiers": [
+      {
+        "role": "acuifero_node",
+        "deployment": "raspberry_pi_camera_node",
+        "name": "google/gemma-4-E4B-it",
+        "size": "Effective 4B",
+        "runtime": "LiteRT",
+        "task": "on-edge visual classification of river state from camera frames"
+      },
+      {
+        "role": "vigia_app",
+        "deployment": "android_handset",
+        "name": "google/gemma-4-E2B-it",
+        "size": "Effective 2B",
+        "runtime": "LiteRT",
+        "task": "on-device fusion of citizen audio reports + transcript into structured evidence"
+      },
+      {
+        "role": "central_node",
+        "deployment": "server",
+        "name": "google/gemma-4-26B-A4B-it",
+        "size": "26B MoE (4B active)",
+        "runtime": "Ollama / llama.cpp",
+        "task": "cross-node fusion of telemetry + citizen evidence into final alert"
+      }
+    ]
   }
 }

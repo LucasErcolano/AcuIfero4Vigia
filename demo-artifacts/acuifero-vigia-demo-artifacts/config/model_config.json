@@ -1,34 +1,45 @@
 {
-  "model": {
-    "name": "google/gemma-4-4b-it",
-    "family": "Gemma 4",
-    "size_params_b": 4,
-    "weights_bundled": false,
-    "weights_source": "https://huggingface.co/google/gemma-4-4b-it",
-    "license": "Gemma Terms of Use",
-    "fine_tuned": false,
-    "adapters": []
-  },
-  "runtimes": [
-    {
-      "name": "LiteRT",
-      "target": "raspberry_pi_4_8gb",
+  "family": "Gemma 4",
+  "weights_bundled": false,
+  "weights_license": "Gemma Terms of Use",
+  "tiers": {
+    "acuifero_node": {
+      "deployment": "raspberry_pi_camera_node",
+      "name": "google/gemma-4-E4B-it",
+      "size_label": "Effective 4B",
+      "modalities": ["text", "image"],
+      "weights_source": "https://huggingface.co/google/gemma-4-E4B-it",
+      "runtime": "LiteRT",
+      "config_path": "config/lite_rt_config.json",
       "quantization": "int4",
-      "config_path": "config/lite_rt_config.json"
+      "context_window_tokens": 8192,
+      "task": "on-edge visual classification of river state from camera frames"
     },
-    {
-      "name": "Ollama",
-      "target": "raspberry_pi_5_8gb",
-      "quantization": "q4_K_M"
+    "vigia_app": {
+      "deployment": "android_handset",
+      "name": "google/gemma-4-E2B-it",
+      "size_label": "Effective 2B",
+      "modalities": ["text", "audio_transcript"],
+      "weights_source": "https://huggingface.co/google/gemma-4-E2B-it",
+      "runtime": "LiteRT",
+      "quantization": "int4",
+      "context_window_tokens": 8192,
+      "task": "on-device fusion of citizen audio reports into structured evidence"
     },
-    {
-      "name": "llama.cpp",
-      "target": "x86_dev_host",
-      "quantization": "q5_K_M"
+    "central_node": {
+      "deployment": "server",
+      "name": "google/gemma-4-26B-A4B-it",
+      "size_label": "26B MoE (4B active)",
+      "modalities": ["text", "image", "audio_transcript"],
+      "weights_source": "https://huggingface.co/google/gemma-4-26B-A4B-it",
+      "runtime": "Ollama",
+      "quantization": "q4_K_M",
+      "fallback_runtime": "llama.cpp",
+      "fallback_quantization": "q5_K_M",
+      "context_window_tokens": 32768,
+      "task": "cross-node fusion of telemetry + citizen evidence into final alert"
     }
-  ],
-  "modalities": ["text", "image", "audio_transcript"],
-  "context_window_tokens": 8192,
+  },
   "decoding": {
     "temperature": 0.2,
     "top_p": 0.9,
