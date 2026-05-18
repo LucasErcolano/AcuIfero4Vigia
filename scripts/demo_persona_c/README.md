@@ -2,12 +2,12 @@
 
 3-acto curl-driven escalada para grabar el Nodo Central + fusion engine en vivo.
 
-## Requisitos en la VM (hz@100.105.56.84)
+## Requisitos
 
 ```bash
-# backend con demo-inject habilitado
+# backend con demo-inject habilitado (correr desde la raíz del repo)
 export ACUIFERO_ENABLE_DEMO_INJECT=1
-cd /home/hz/work/AcuIfero4Vigia_local/backend
+cd "$(git rev-parse --show-toplevel)/backend"
 PYTHONPATH=src python3 -m acuifero_vigia.scripts.seed
 PYTHONPATH=src python3 -m uvicorn acuifero_vigia.main:app --host 127.0.0.1 --port 8000
 ```
@@ -44,4 +44,4 @@ del puente desbordada".
 
 - `API` — base URL backend (default `http://127.0.0.1:8000`)
 - `SITE` — site_id (default `puente-arroyo-01`)
-- `BACKEND_DIR` — solo para `00_reset.sh` (default `/home/hz/work/AcuIfero4Vigia_local/backend`)
+- `BACKEND_DIR` — solo para `00_reset.sh` (default: `<repo-root>/backend`, resuelto desde la ubicación del script)

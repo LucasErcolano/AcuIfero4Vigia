@@ -1,7 +1,7 @@
 # Acuifero 4 + Vigia — Writeup Gemma 4 Good Hackathon
 
 Track: Global Resilience (Climate). Premio objetivo: LiteRT Prize.
-Repo: `LucasErcolano/AcuIfero4Vigia`. Branch baseline: `develop`.
+Repo: `LucasErcolano/AcuIfero4Vigia`. Branch baseline: `main`.
 
 ## 1. Problema humano
 
@@ -63,12 +63,13 @@ crea un `Incident` con maquina de estados
 actuacion (sirena, radio LoRaWAN, push) se idempotenta a nivel
 incidente para evitar refire en cada recompute.
 
-**Salida CAP v1.2.** `POST /api/alerts/{id}/export-sinagir` emite un
-payload taggeado con el schema oficial mapeado campo por campo. No se
-reclama compliance certificada; se posiciona como *fuente de deteccion
-complementaria* que notifica a Defensa Civil municipal, no como emisor
-oficial al publico general (ver seccion 8).
-<!-- Persona C flag: este endpoint exporta SINAGIR-ready JSON. CAP XML v1.2 ahora sale por POST /cap/emit y /api/cap/emit; conviene nombrar ambos para no mezclar JSON SINAGIR con CAP XML. -->
+**Salida CAP v1.2.** Hay dos endpoints separados y no deben mezclarse:
+`POST /api/alerts/{id}/export-sinagir` emite un JSON SINAGIR-ready
+mapeado campo por campo; `POST /cap/emit` (y su alias
+`POST /api/cap/emit`) emite el CAP XML v1.2 propiamente dicho. No se
+reclama compliance certificada; el sistema se posiciona como *fuente
+de deteccion complementaria* que notifica a Defensa Civil municipal,
+no como emisor oficial al publico general (ver seccion 8).
 
 ## 3. Por que Gemma 4
 
@@ -91,8 +92,11 @@ por una CNN + reglas:
   `temporal_summary`, `reasoning_summary`, `reasoning_steps`,
   `critical_evidence`).
 - **Function calling y JSON estructurado.** El voluntario habla
-  rioplatense; Gemma devuelve JSON normalizado a enums SINAGIR.
-  <!-- Persona C flag: el backend valida tool calls estrictos para trigger_siren/emit_cap/send_lora; no todos los JSON del voluntario son enums SINAGIR, varios son enums operativos internos. -->
+  rioplatense; Gemma devuelve JSON normalizado a una mezcla de enums
+  SINAGIR (campos de severidad / tipologia) y enums operativos internos
+  (estado de via, accesos, infraestructura). El backend valida ademas
+  tool calls estrictos para `trigger_siren` / `emit_cap` / `send_lora`
+  antes de cualquier actuacion.
 - **Latencia compatible con emergencias.** Sub-12 s objetivo combinado
   texto+imagen en mid-range Android (cold load incluido); sub-segundo
   por inferencia warm en Pi 8 GB demo (un frame, `IMAGE_MAX_SIDE=512`,
@@ -116,8 +120,6 @@ persiste un audit pack con frame curado, JSON manifests, metadata del
 runner y estado de fallback en `AcuiferoAssessmentArtifact`. Smoke test
 real publicado: el clip USGS Silverado da `frames_analyzed=126`,
 `assessment_mode=temporal-gemma-v1`, `alert_level=red`.
-[TODO: confirmar latencia end-to-end medida en Pi 8 GB real — el repo
-documenta el perfil pero no publica numeros de latencia/RAM peak].
 
 ## 5. Sección técnica: Vigía móvil
 
@@ -140,8 +142,7 @@ offline, sin enviar voz ni texto a nubes extranjeras. Si Gemma falla,
 *no hay fallback silencioso a backend*: la UI exige confirmacion
 explicita del usuario. Latencias proyectadas (no medidas en device
 real): cold load 3.8 s, parseo texto 4.2 s, evaluacion imagen 5.8 s en
-Snapdragon 7-gen. [TODO: confirmar latencia en hardware fisico —
-documentado abiertamente en `docs/hackathon/android_gemma.md`].
+Snapdragon 7-gen.
 
 ## 6. Anti-alucinación (resumen)
 
@@ -213,11 +214,18 @@ de contrato: tienen API, trazabilidad, degradacion explicita y tests.
 Honestos: (a) calibracion del ROI es numerica/rectangular, no
 click-to-draw; (b) el evidence builder esta tuneado para encuadres
 estables, camaras moviles fuera de scope; (c) LiteRT-LM es runner
-objetivo, no actual; (d) las latencias de Android son proyecciones
-(sin device fisico de validacion); (e) el few-shot rioplatense
-ocasionalmente confunde `high`/`critical` en frases borderline, un
-LoRA fine-tune lo tightenearia. Proximos pasos: medir latencia/RAM en
-Pi 8 GB real, calibracion click-to-draw, LoRA rioplatense rank
-16/alpha 32 sobre 40 train examples, runner LiteRT-LM, y piloto
-firmado con una Defensa Civil municipal del Litoral antes de cualquier
-deploy en via publica.
+objetivo en el nodo Pi, no actual (hoy corre Ollama con fallback
+determinista); (d) **latencia/RAM end-to-end en Pi 8 GB real no
+publicada** — el repo documenta el perfil deployable
+(`scripts/run_acuifero_pi8_multimodal_demo.sh`) pero todavia no hay
+numeros medidos en hardware; (e) **latencias Android son
+proyecciones** (cold load 3.8 s / texto 4.2 s / imagen 5.8 s en
+Snapdragon 7-gen) sin device fisico de validacion, abiertamente
+documentado en `docs/hackathon/android_gemma.md`; (f) el few-shot
+rioplatense ocasionalmente confunde `high`/`critical` en frases
+borderline, un LoRA fine-tune lo tightenearia. Proximos pasos: medir
+latencia/RAM en Pi 8 GB real, medir Android en device fisico,
+calibracion click-to-draw, LoRA rioplatense rank 16/alpha 32 sobre 40
+train examples, runner LiteRT-LM en backend, y piloto firmado con una
+Defensa Civil municipal del Litoral antes de cualquier deploy en via
+publica.

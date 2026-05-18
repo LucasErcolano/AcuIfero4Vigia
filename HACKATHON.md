@@ -2,6 +2,12 @@
 
 Track: **Global Resilience**. Prize target: **LiteRT Prize (USD 10,000)**.
 
+> **For technical judges.** This file maps the submission to each judging
+> criterion with one short claim and a link to the file that proves it.
+> For the product narrative (problem framing, demo storyboard, novelty
+> assessment), see [`MAIN_IDEA.md`](MAIN_IDEA.md). For step-by-step
+> reproducibility, see [`docs/REPRODUCIBILITY.md`](docs/REPRODUCIBILITY.md).
+
 ## Judging criteria alignment
 
 ### 1. Why not cloud GPT-4? - Gemma decides locally on the node

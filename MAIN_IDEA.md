@@ -2,6 +2,13 @@
 
 *Sistema híbrido de alerta temprana de inundaciones con IA en el borde, resiliente a la caída de conectividad.*
 
+> **Documento de producto y narrativa.** Pitch extenso en español: problema,
+> encaje en el track, cómo se ve la demo, arquitectura, factibilidad,
+> diferenciación y Novelty Assessment. Para la grilla de criterios del
+> hackathon con proof links, ver [`HACKATHON.md`](HACKATHON.md). Para
+> reproducibilidad paso a paso, ver
+> [`docs/REPRODUCIBILITY.md`](docs/REPRODUCIBILITY.md).
+
 ---
 
 ## **Pitch de una línea**
@@ -60,9 +67,9 @@ Hay un hueco estructural entre la alerta meteorológica nacional y la alerta de 
 
 **Nodo fijo (edge)**
 
-* Raspberry Pi 5 o x86 comodity con Ollama local.  
-* OpenCV headless para muestreo temporal y detección heurística de waterline sobre ROI calibrado por sitio.  
-* Gemma 4 E2B/E4B sobre endpoint OpenAI-compatible de Ollama para Thinking Mode y descripción multimodal del evidence frame.  
+* Raspberry Pi 5 (8 GB demo, 16 GB prod) o x86 comodity.  
+* `ffmpeg` de sistema para muestreo temporal de la cámara fija; el frame curado va **directo a Gemma 4 multimodal** (OpenCV ya no participa de la decisión visual, queda sólo como utilidad de curación de ROI).  
+* Gemma 4 E2B/E4B vía **LiteRT-LM** en el Pi (mismo `.litertlm` que la app Android); Ollama queda como path de dev en workstation. Thinking Mode + descripción multimodal del evidence frame producen el paquete completo de `assessment_*` + `reasoning_*` por nodo.  
 * Actuadores detrás de interfaces (`AlarmActuator`, `RadioActuator`, `NotificationActuator`) — en producción conectables a GPIO \+ LoRaWAN; en demo simulados con WAV / log / banner.
 
 **App voluntario (PWA mobile-first)**
@@ -78,7 +85,7 @@ Hay un hueco estructural entre la alerta meteorológica nacional y la alerta de 
 * Scoring transparente: `fused_score = max(node_score, report_score) + corroboration_bonus`, con overrides duros por frases críticas o cruce verificado de línea.  
 * Enriquecimiento hidrometeorológico vía Open-Meteo APIs usando coordenadas del sitio.
 
-**Contrato JSON**: normalizado y SINAME-ready. Mapeo documentado en `docs/sinagir-mapping.md`. No se reclama compliance oficial sin verificación.
+**Contrato JSON**: normalizado y SINAME-ready. Mapeo documentado en `docs/hackathon/sinagir-mapping.md`. No se reclama compliance oficial sin verificación.
 
 ---
 
@@ -95,14 +102,15 @@ Hay un hueco estructural entre la alerta meteorológica nacional y la alerta de 
 | Backend con endpoints salud / sites / calibración / análisis de nodo / reportes / alertas / sync | ✅ Implementado |
 | Frontend PWA con dashboard, reporte, cola, sitios, calibración, settings | ✅ Implementado |
 | Offline-first con IndexedDB \+ cola \+ sync queue | ✅ Implementado |
-| Integración Ollama \+ Gemma operativa | ✅ Implementado |
-| Análisis CV real sobre clip fijo (no mock) | ✅ Implementado |
+| Integración Gemma operativa (Ollama central + LiteRT-LM nodo/Android) | ✅ Implementado |
+| Análisis multimodal real sobre clip fijo (no mock) | ✅ Implementado |
 | Tests backend (health, parser, sync, attachments, node analysis) | ✅ Declarados |
-| Thinking Mode visible en `decision_trace` | ⚠️ Por implementar |
-| Gemma describiendo el evidence frame multimodal | ⚠️ Por implementar |
-| Few-shot rioplatense con casos de test | ⚠️ Por documentar |
-| Click-to-draw en calibración (hoy es numérica/rectangular) | ⚠️ Por implementar |
-| `docs/sinagir-mapping.md` concreto | ⚠️ Por redactar |
+| Thinking Mode visible en `decision_trace` | ✅ Implementado — ver [`docs/hackathon/thinking-mode.md`](docs/hackathon/thinking-mode.md) |
+| Gemma describiendo el evidence frame multimodal | ✅ Implementado — ver [`docs/hackathon/multimodal-comparison.md`](docs/hackathon/multimodal-comparison.md) |
+| Few-shot rioplatense con casos de test | ✅ Implementado — corpus de 82 ejemplos, ver [`docs/hackathon/rioplatense_eval.md`](docs/hackathon/rioplatense_eval.md) |
+| Click-to-draw en calibración | ✅ Implementado (commit `ce62b88`) |
+| Mapeo SINAGIR concreto | ✅ Implementado — ver [`docs/hackathon/sinagir-mapping.md`](docs/hackathon/sinagir-mapping.md) |
+| Vigía Android on-device (LiteRT-LM, mismo `.litertlm` que el backend) | ✅ Implementado — ver [`docs/hackathon/android_gemma.md`](docs/hackathon/android_gemma.md) |
 
 ---
 
@@ -138,7 +146,7 @@ Hay un hueco estructural entre la alerta meteorológica nacional y la alerta de 
 
 ### **De ejecución y percepción**
 
-* **Solo dev, sin CI visible, sin releases**: baja percepción de madurez del repo. *Mitigación antes de entregar*: merge `develop` → `main`, tag `v1.0-hackathon`, crear release con changelog, agregar `LICENSE` \+ `CONTRIBUTING.md` breve.
+* La salida del MVP a `main` y el tag `v1.0-hackathon-submission` ya se hicieron; release con changelog y trazabilidad de PRs publicada. Próximo paso en este eje: CI visible (GitHub Actions) si la entrega lo requiere.
 
 # Novelty Assessment — Acuífero 4 \+ Vigía
 
